@@ -235,6 +235,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           # Use a non-standard name so @tauri-apps/cli doesn't auto-load it
           SIGNING_KEY_RAW: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          SIGNING_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         run: |
           VERSION=$(node -p "require('./package.json').version")
           TAG="v${VERSION}"
@@ -251,10 +252,10 @@ jobs:
           chmod 600 "$KEY_FILE"
           printf '%s' "$SIGNING_KEY_RAW" > "$KEY_FILE"
 
-          # Sign with empty password (key was generated without a password)
+          # Sign with the key password
           npx @tauri-apps/cli signer sign \
             -f "$KEY_FILE" \
-            -p "" \
+            -p "$SIGNING_KEY_PASSWORD" \
             "$TAR_FILE"
 
           rm -f "$KEY_FILE"
