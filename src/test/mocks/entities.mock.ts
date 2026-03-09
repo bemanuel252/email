@@ -125,6 +125,8 @@ export function createMockGmailAccount(
     caldav_home_url: null,
     calendar_provider: null,
     accept_invalid_certs: 0,
+    provider_type: 'gmail',
+    user_id: null,
     ...overrides,
   };
 }
@@ -165,6 +167,8 @@ export function createMockImapAccount(
     caldav_home_url: null,
     calendar_provider: null,
     accept_invalid_certs: 0,
+    provider_type: 'imap',
+    user_id: null,
     ...overrides,
   };
 }
@@ -205,6 +209,8 @@ export function createMockDbAccount(
     caldav_home_url: null,
     calendar_provider: null,
     accept_invalid_certs: 0,
+    provider_type: 'imap',
+    user_id: null,
     ...overrides,
   };
 }

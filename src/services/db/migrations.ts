@@ -775,6 +775,33 @@ const MIGRATIONS = [
     description: "Accept self-signed certificates for IMAP/SMTP",
     sql: `ALTER TABLE accounts ADD COLUMN accept_invalid_certs INTEGER DEFAULT 0;`,
   },
+  {
+    version: 24,
+    description: "Multi-provider support: provider_type, per-account OAuth credentials, users table",
+    sql: `
+      -- provider_type: explicit column for routing to the right EmailProvider
+      ALTER TABLE accounts ADD COLUMN provider_type TEXT NOT NULL DEFAULT 'gmail';
+
+      -- oauth_client_id / oauth_client_secret: per-account credentials (Fastmail needs its own app registration)
+      ALTER TABLE accounts ADD COLUMN oauth_client_id TEXT;
+      ALTER TABLE accounts ADD COLUMN oauth_client_secret TEXT;
+
+      -- users table: plant the seed for multi-profile support; not wired to UI yet
+      CREATE TABLE IF NOT EXISTS users (
+        id TEXT PRIMARY KEY,
+        display_name TEXT NOT NULL,
+        avatar_url TEXT,
+        is_default INTEGER DEFAULT 0,
+        created_at INTEGER DEFAULT (unixepoch())
+      );
+
+      -- user_id on accounts: nullable, for future multi-profile routing
+      ALTER TABLE accounts ADD COLUMN user_id TEXT REFERENCES users(id) ON DELETE SET NULL;
+
+      -- index for provider routing
+      CREATE INDEX IF NOT EXISTS idx_accounts_provider_type ON accounts(provider_type);
+    `,
+  },
 ];
 
 /**

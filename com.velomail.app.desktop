@@ -1,9 +1,9 @@
 [Desktop Entry]
-Name=Velo
+Name=Email
 Comment=Fast, beautiful desktop email client
-Exec=velo
-Icon=com.velomail.app
+Exec=email
+Icon=com.bemanuel.mail
 Type=Application
 Categories=Network;Email;
-StartupWMClass=Velo
+StartupWMClass=Email
 StartupNotify=true

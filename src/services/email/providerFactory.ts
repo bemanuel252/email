@@ -1,6 +1,7 @@
 import type { EmailProvider } from "./types";
 import { GmailApiProvider } from "./gmailProvider";
 import { ImapSmtpProvider } from "./imapSmtpProvider";
+import { FastmailImapProvider } from "./fastmailProvider";
 import { getAccount } from "../db/accounts";
 import { getGmailClient } from "../gmail/tokenManager";
 
@@ -21,12 +22,23 @@ export async function getEmailProvider(
 
   let provider: EmailProvider;
 
-  if (account.provider === "imap") {
-    provider = new ImapSmtpProvider(accountId);
-  } else {
-    // Default: gmail_api
-    const client = await getGmailClient(accountId);
-    provider = new GmailApiProvider(accountId, client);
+  switch ((account.provider_type ?? account.provider) as string) {
+    case "gmail":
+    case "gmail_api": {
+      // "gmail_api" retained for backwards compatibility
+      const client = await getGmailClient(accountId);
+      provider = new GmailApiProvider(accountId, client);
+      break;
+    }
+    case "fastmail_imap":
+      provider = new FastmailImapProvider(accountId);
+      break;
+    case "fastmail_jmap":
+      throw new Error("Fastmail JMAP provider not yet implemented. Use fastmail_imap.");
+    case "imap":
+    default:
+      provider = new ImapSmtpProvider(accountId);
+      break;
   }
 
   providers.set(accountId, provider);
@@ -47,7 +59,7 @@ export function removeProvider(accountId: string): void {
  */
 export function invalidateProviderConfig(accountId: string): void {
   const existing = providers.get(accountId);
-  if (existing && existing instanceof ImapSmtpProvider) {
+  if (existing instanceof ImapSmtpProvider || existing instanceof FastmailImapProvider) {
     existing.clearConfigCache();
   }
 }

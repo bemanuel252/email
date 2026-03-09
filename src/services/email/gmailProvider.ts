@@ -26,7 +26,7 @@ const GMAIL_SPECIAL_USE: Record<string, string | null> = {
  */
 export class GmailApiProvider implements EmailProvider {
   readonly accountId: string;
-  readonly type = "gmail_api" as const;
+  readonly type = "gmail" as const;
   private client: GmailClient;
 
   constructor(accountId: string, client: GmailClient) {

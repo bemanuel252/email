@@ -1,6 +1,13 @@
 import { getDb, selectFirstBy } from "./connection";
 import { encryptValue, decryptValue, isEncrypted } from "@/utils/crypto";
 
+export type ProviderType =
+  | 'gmail'
+  | 'fastmail_imap'
+  | 'fastmail_jmap'
+  | 'imap'
+  | 'caldav';
+
 export interface DbAccount {
   id: string;
   email: string;
@@ -34,6 +41,8 @@ export interface DbAccount {
   caldav_home_url: string | null;
   calendar_provider: string | null;
   accept_invalid_certs: number;
+  provider_type: ProviderType;
+  user_id: string | null;
 }
 
 async function decryptAccountTokens(account: DbAccount): Promise<DbAccount> {
@@ -109,13 +118,14 @@ export async function insertAccount(account: {
   accessToken: string;
   refreshToken: string;
   tokenExpiresAt: number;
+  providerType?: ProviderType;
 }): Promise<void> {
   const db = await getDb();
   const encAccessToken = await encryptValue(account.accessToken);
   const encRefreshToken = await encryptValue(account.refreshToken);
   await db.execute(
-    `INSERT INTO accounts (id, email, display_name, avatar_url, access_token, refresh_token, token_expires_at)
-     VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+    `INSERT INTO accounts (id, email, display_name, avatar_url, access_token, refresh_token, token_expires_at, provider_type)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
     [
       account.id,
       account.email,
@@ -124,6 +134,7 @@ export async function insertAccount(account: {
       encAccessToken,
       encRefreshToken,
       account.tokenExpiresAt,
+      account.providerType ?? 'gmail',
     ],
   );
 }

@@ -7,6 +7,12 @@ export interface OAuthProviderConfig {
   userInfoUrl?: string;
   /** Whether PKCE is required (Microsoft requires it, Yahoo supports it) */
   usePkce: boolean;
+  /**
+   * When true, the user must supply their own OAuth client ID from the
+   * provider's developer settings. No default clientId is bundled.
+   * (Fastmail requires user-registered OAuth apps.)
+   */
+  requiresUserClientId?: boolean;
 }
 
 const providers: Record<string, OAuthProviderConfig> = {
@@ -36,6 +42,23 @@ const providers: Record<string, OAuthProviderConfig> = {
     scopes: ["mail-r", "mail-w", "openid", "sdps-r"],
     userInfoUrl: "https://api.login.yahoo.com/openid/v1/userinfo",
     usePkce: true,
+  },
+  fastmail: {
+    id: "fastmail",
+    name: "Fastmail",
+    authUrl: "https://api.fastmail.com/oauth/authorize",
+    tokenUrl: "https://api.fastmail.com/oauth/refresh",
+    scopes: [
+      "https://www.fastmail.com/dev/protocol-imap",
+      "https://www.fastmail.com/dev/protocol-smtp",
+      "profile",
+      "email",
+    ],
+    userInfoUrl: undefined,
+    usePkce: true,
+    // No default clientId — user must supply from Fastmail developer settings:
+    // https://app.fastmail.com/settings/security/integrations
+    requiresUserClientId: true,
   },
 };
 

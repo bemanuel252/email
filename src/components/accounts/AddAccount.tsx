@@ -7,6 +7,7 @@ import { useAccountStore } from "@/stores/accountStore";
 import { Modal } from "@/components/ui/Modal";
 import { SetupClientId } from "./SetupClientId";
 import { AddImapAccount } from "./AddImapAccount";
+import { AddFastmailAccount } from "./AddFastmailAccount";
 import { AddCalDavAccount } from "./AddCalDavAccount";
 import { getCurrentUnixTimestamp } from "@/utils/timestamp";
 
@@ -15,7 +16,7 @@ interface AddAccountProps {
   onSuccess: () => void;
 }
 
-type View = "select-provider" | "gmail" | "imap" | "caldav";
+type View = "select-provider" | "gmail" | "fastmail" | "imap" | "caldav";
 
 export function AddAccount({ onClose, onSuccess }: AddAccountProps) {
   const [view, setView] = useState<View>("select-provider");
@@ -94,6 +95,16 @@ export function AddAccount({ onClose, onSuccess }: AddAccountProps) {
     );
   }
 
+  if (view === "fastmail") {
+    return (
+      <AddFastmailAccount
+        onClose={onClose}
+        onSuccess={onSuccess}
+        onBack={() => setView("select-provider")}
+      />
+    );
+  }
+
   if (view === "imap") {
     return (
       <AddImapAccount
@@ -109,7 +120,7 @@ export function AddAccount({ onClose, onSuccess }: AddAccountProps) {
       <Modal isOpen={true} onClose={onClose} title="Add Gmail Account" width="w-full max-w-md">
         <div className="p-4">
           <p className="text-text-secondary text-sm mb-6">
-            Sign in with your Google account to connect it to Velo.
+            Sign in with your Google account to connect it to Email.
           </p>
 
           {error && (
@@ -202,6 +213,23 @@ export function AddAccount({ onClose, onSuccess }: AddAccountProps) {
               </div>
               <div className="text-xs text-text-tertiary mt-0.5">
                 Connect via OAuth with full Gmail API support
+              </div>
+            </div>
+          </button>
+
+          <button
+            onClick={() => setView("fastmail")}
+            className="w-full flex items-center gap-4 p-4 rounded-lg border border-border-primary bg-bg-secondary hover:bg-bg-hover transition-colors text-left group"
+          >
+            <div className="flex-shrink-0 w-10 h-10 rounded-lg bg-bg-tertiary flex items-center justify-center">
+              <span className="text-xs font-bold text-text-secondary tracking-tight">FM</span>
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="text-sm font-medium text-text-primary group-hover:text-accent transition-colors">
+                Fastmail
+              </div>
+              <div className="text-xs text-text-tertiary mt-0.5">
+                Connect via IMAP with OAuth
               </div>
             </div>
           </button>

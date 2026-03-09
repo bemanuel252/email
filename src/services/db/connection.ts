@@ -4,7 +4,10 @@ let db: Database | null = null;
 
 export async function getDb(): Promise<Database> {
   if (!db) {
-    db = await Database.load("sqlite:velo.db");
+    db = await Database.load("sqlite:email.db");
+    await db.execute("PRAGMA journal_mode=WAL;");
+    await db.execute("PRAGMA synchronous=NORMAL;");
+    await db.execute("PRAGMA foreign_keys=ON;");
   }
   return db;
 }

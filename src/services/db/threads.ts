@@ -261,3 +261,54 @@ export async function getMutedThreadIds(
   );
   return new Set(rows.map((r) => r.id));
 }
+
+/**
+ * Combined inbox: fetch threads across multiple accounts, ordered by recency.
+ * Used when activeAccountId is null (All Accounts view).
+ */
+export async function getThreadsForAllAccounts(
+  accountIds: string[],
+  labelType: string = 'INBOX',
+  limit: number = 50,
+  offset: number = 0,
+): Promise<DbThread[]> {
+  if (accountIds.length === 0) return [];
+
+  const db = await getDb();
+  const placeholders = accountIds.map(() => '?').join(',');
+
+  const rows = await db.select<DbThread[]>(`
+    SELECT DISTINCT
+      t.id,
+      t.account_id,
+      t.subject,
+      t.snippet,
+      t.last_message_at,
+      t.message_count,
+      t.is_read,
+      t.is_starred,
+      t.has_attachments,
+      t.is_snoozed,
+      t.snooze_until,
+      t.is_pinned,
+      t.is_muted,
+      t.is_important,
+      m.from_name,
+      m.from_address
+    FROM threads t
+    JOIN thread_labels tl
+      ON tl.thread_id = t.id AND tl.account_id = t.account_id
+    JOIN labels l
+      ON l.id = tl.label_id AND l.account_id = t.account_id
+    LEFT JOIN messages m
+      ON m.account_id = t.account_id AND m.thread_id = t.id
+      AND m.date = (SELECT MAX(m2.date) FROM messages m2 WHERE m2.account_id = t.account_id AND m2.thread_id = t.id)
+    WHERE t.account_id IN (${placeholders})
+      AND l.type = ?
+      AND t.is_snoozed = 0
+    ORDER BY t.last_message_at DESC
+    LIMIT ? OFFSET ?
+  `, [...accountIds, labelType, limit, offset]);
+
+  return rows;
+}

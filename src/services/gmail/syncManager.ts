@@ -261,9 +261,21 @@ async function runSync(accountIds: string[]): Promise<void> {
 
   syncPromise = (async () => {
     try {
-      for (const id of accountIds) {
-        await syncAccountInternal(id);
-      }
+      // Run all accounts in parallel — each has its own sync state in the DB.
+      // Promise.allSettled ensures one failure doesn't cancel others.
+      const results = await Promise.allSettled(
+        accountIds.map((id) => syncAccountInternal(id)),
+      );
+
+      // Log any failures (don't throw — background sync should be resilient)
+      results.forEach((result, i) => {
+        if (result.status === "rejected") {
+          console.error(
+            `[syncManager] Sync failed for account ${accountIds[i]}:`,
+            result.reason,
+          );
+        }
+      });
     } finally {
       syncPromise = null;
     }

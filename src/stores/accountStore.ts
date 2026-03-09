@@ -14,7 +14,8 @@ interface AccountState {
   accounts: Account[];
   activeAccountId: string | null;
   setAccounts: (accounts: Account[], restoredId?: string | null) => void;
-  setActiveAccount: (id: string) => void;
+  setActiveAccount: (id: string | null) => void;
+  setAllAccounts: () => void;
   addAccount: (account: Account) => void;
   removeAccount: (id: string) => void;
 }
@@ -30,10 +31,14 @@ export const useAccountStore = create<AccountState>((set) => ({
     set({ accounts, activeAccountId: activeId });
   },
 
-  setActiveAccount: (activeAccountId) => {
-    setSetting("active_account_id", activeAccountId).catch(() => {});
-    set({ activeAccountId });
+  setActiveAccount: (id) => {
+    if (id !== null) {
+      setSetting("active_account_id", id).catch(() => {});
+    }
+    set({ activeAccountId: id });
   },
+
+  setAllAccounts: () => set({ activeAccountId: null }),
 
   addAccount: (account) =>
     set((state) => ({
@@ -53,3 +58,31 @@ export const useAccountStore = create<AccountState>((set) => ({
       };
     }),
 }));
+
+/**
+ * Returns account IDs to use for thread queries.
+ * null activeAccountId = combined inbox = all active accounts.
+ * string activeAccountId = single account.
+ */
+export const useActiveAccountIds = (): string[] =>
+  useAccountStore((s) =>
+    s.activeAccountId
+      ? [s.activeAccountId]
+      : s.accounts.filter((a) => a.isActive).map((a) => a.id),
+  );
+
+/**
+ * Returns true if we're in combined inbox mode (showing all accounts).
+ */
+export const useIsCombinedInbox = (): boolean =>
+  useAccountStore((s) => s.activeAccountId === null && s.accounts.length > 1);
+
+/**
+ * Type guard: ensure we never accidentally query without account context.
+ * Use this at query callsites: if (!accountIds.length) return [];
+ */
+export function assertAccountIds(ids: string[], context: string): void {
+  if (ids.length === 0) {
+    console.warn(`[${context}] No account IDs available — query skipped`);
+  }
+}

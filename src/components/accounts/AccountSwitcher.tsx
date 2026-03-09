@@ -1,6 +1,6 @@
 import { useState, useRef, useCallback } from "react";
 import { useAccountStore, type Account } from "@/stores/accountStore";
-import { ChevronDown, Check, Plus, UserPlus, Calendar } from "lucide-react";
+import { ChevronDown, Check, Plus, UserPlus, Calendar, Layers } from "lucide-react";
 import { useClickOutside } from "@/hooks/useClickOutside";
 
 interface AccountSwitcherProps {
@@ -12,13 +12,14 @@ export function AccountSwitcher({
   collapsed,
   onAddAccount,
 }: AccountSwitcherProps) {
-  const { accounts, activeAccountId, setActiveAccount } = useAccountStore();
+  const { accounts, activeAccountId, setActiveAccount, setAllAccounts } = useAccountStore();
   const [open, setOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement | null>(null);
 
   useClickOutside(dropdownRef, () => setOpen(false));
 
   const activeAccount = accounts.find((a) => a.id === activeAccountId);
+  const isAllAccounts = activeAccountId === null && accounts.length > 1;
 
   const handleSwitch = useCallback(
     (id: string) => {
@@ -27,6 +28,11 @@ export function AccountSwitcher({
     },
     [setActiveAccount],
   );
+
+  const handleAllAccounts = useCallback(() => {
+    setAllAccounts();
+    setOpen(false);
+  }, [setAllAccounts]);
 
   const handleAdd = useCallback(() => {
     onAddAccount();
@@ -61,23 +67,42 @@ export function AccountSwitcher({
           collapsed ? "justify-center" : "gap-2.5"
         } ${open ? "bg-sidebar-hover" : ""}`}
       >
-        <ActiveAvatar account={activeAccount} />
-        {!collapsed && activeAccount && (
+        {isAllAccounts ? (
+          <AllAccountsAvatar accounts={accounts} />
+        ) : (
+          <ActiveAvatar account={activeAccount} />
+        )}
+        {!collapsed && (
           <>
             <div className="flex-1 min-w-0 text-left">
-              <div className="text-sm font-medium text-sidebar-text truncate leading-tight">
-                {activeAccount.displayName || activeAccount.email.split("@")[0]}
-              </div>
-              <div className="text-xs text-sidebar-text/50 truncate leading-tight">
-                {activeAccount.email}
-              </div>
+              {isAllAccounts ? (
+                <>
+                  <div className="text-sm font-medium text-sidebar-text truncate leading-tight">
+                    All Accounts
+                  </div>
+                  <div className="text-xs text-sidebar-text/50 truncate leading-tight">
+                    {accounts.length} accounts
+                  </div>
+                </>
+              ) : activeAccount ? (
+                <>
+                  <div className="text-sm font-medium text-sidebar-text truncate leading-tight">
+                    {activeAccount.displayName || activeAccount.email.split("@")[0]}
+                  </div>
+                  <div className="text-xs text-sidebar-text/50 truncate leading-tight">
+                    {activeAccount.email}
+                  </div>
+                </>
+              ) : null}
             </div>
-            <ChevronDown
-              size={14}
-              className={`shrink-0 text-sidebar-text/40 transition-transform duration-200 ${
-                open ? "rotate-180" : ""
-              }`}
-            />
+            {(isAllAccounts || activeAccount) && (
+              <ChevronDown
+                size={14}
+                className={`shrink-0 text-sidebar-text/40 transition-transform duration-200 ${
+                  open ? "rotate-180" : ""
+                }`}
+              />
+            )}
           </>
         )}
       </button>
@@ -90,9 +115,39 @@ export function AccountSwitcher({
           }`}
         >
           {accounts.length > 1 && (
-            <div className="px-3 py-1.5 text-[0.625rem] font-medium text-text-tertiary uppercase tracking-wider">
-              Accounts
-            </div>
+            <>
+              <button
+                onClick={handleAllAccounts}
+                className={`flex items-center gap-2.5 w-full px-3 py-2 text-left transition-colors ${
+                  isAllAccounts
+                    ? "bg-accent/8 text-accent"
+                    : "text-text-primary hover:bg-bg-hover"
+                }`}
+              >
+                <div
+                  className={`w-7 h-7 rounded-full flex items-center justify-center shrink-0 ${
+                    isAllAccounts ? "bg-accent text-white" : "bg-accent/12 text-accent"
+                  }`}
+                >
+                  <Layers size={14} />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="text-sm font-medium truncate leading-tight">
+                    All Accounts
+                  </div>
+                  <div className="text-xs text-text-secondary truncate leading-tight">
+                    Combined inbox
+                  </div>
+                </div>
+                {isAllAccounts && (
+                  <Check size={14} className="shrink-0 text-accent" />
+                )}
+              </button>
+              <div className="border-t border-border-primary my-1" />
+              <div className="px-3 py-1.5 text-[0.625rem] font-medium text-text-tertiary uppercase tracking-wider">
+                Accounts
+              </div>
+            </>
           )}
           {accounts.map((account) => {
             const isActive = account.id === activeAccountId;
@@ -134,6 +189,41 @@ export function AccountSwitcher({
             </div>
             <span>Add account</span>
           </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** Avatar shown in the trigger when "All Accounts" is active — overlapping initials grid */
+function AllAccountsAvatar({ accounts }: { accounts: Account[] }) {
+  const first = accounts.slice(0, 4);
+  const initials = first.map((a) =>
+    (a.displayName?.[0] ?? a.email[0] ?? "?").toUpperCase(),
+  );
+
+  return (
+    <div className="w-8 h-8 rounded-full bg-accent/15 flex items-center justify-center shrink-0 overflow-hidden relative">
+      {initials.length <= 2 ? (
+        // Two initials side by side
+        <div className="flex items-center justify-center w-full h-full gap-0">
+          {initials.map((ch, i) => (
+            <span key={i} className="text-[9px] font-bold text-accent leading-none">
+              {ch}
+            </span>
+          ))}
+        </div>
+      ) : (
+        // 2×2 grid of initials
+        <div className="grid grid-cols-2 w-full h-full">
+          {initials.slice(0, 4).map((ch, i) => (
+            <div
+              key={i}
+              className="flex items-center justify-center text-[7px] font-bold text-accent bg-accent/10"
+            >
+              {ch}
+            </div>
+          ))}
         </div>
       )}
     </div>

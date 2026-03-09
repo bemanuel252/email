@@ -1,6 +1,11 @@
 import type { ParsedMessage } from "../gmail/messageParser";
 
-export type AccountProvider = "gmail_api" | "imap" | "caldav";
+export type AccountProvider =
+  | "gmail"           // Gmail REST API + Google OAuth
+  | "fastmail_imap"   // Fastmail via IMAP + Fastmail OAuth
+  | "fastmail_jmap"   // Fastmail via JMAP (future)
+  | "imap"            // Generic IMAP/SMTP
+  | "caldav";         // Calendar only
 
 export interface EmailFolder {
   id: string;
@@ -94,4 +99,16 @@ export interface EmailProvider {
   // Connection
   testConnection(): Promise<{ success: boolean; message: string }>;
   getProfile(): Promise<{ email: string; name?: string }>;
+}
+
+export function isGmailProvider(type: AccountProvider): boolean {
+  return type === "gmail";
+}
+
+export function isFastmailProvider(type: AccountProvider): boolean {
+  return type === "fastmail_imap" || type === "fastmail_jmap";
+}
+
+export function isImapProvider(type: AccountProvider): boolean {
+  return type === "imap" || type === "fastmail_imap";
 }
