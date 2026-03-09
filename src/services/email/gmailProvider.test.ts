@@ -13,7 +13,7 @@ describe("GmailApiProvider", () => {
 
   it("has correct accountId and type", () => {
     expect(provider.accountId).toBe("account-1");
-    expect(provider.type).toBe("gmail_api");
+    expect(provider.type).toBe("gmail");
   });
 
   describe("listFolders", () => {

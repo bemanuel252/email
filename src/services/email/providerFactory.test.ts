@@ -56,7 +56,7 @@ describe("providerFactory", () => {
 
     expect(provider).toBeInstanceOf(GmailApiProvider);
     expect(provider.accountId).toBe("acc-1");
-    expect(provider.type).toBe("gmail_api");
+    expect(provider.type).toBe("gmail");
   });
 
   it("returns ImapSmtpProvider for imap accounts", async () => {

@@ -30,7 +30,9 @@ describe("withTransaction", () => {
       callOrder.push("callback");
     });
 
-    expect(callOrder).toEqual(["BEGIN TRANSACTION", "callback", "COMMIT"]);
+    // Filter one-time DB initialization pragmas (WAL, synchronous, foreign_keys)
+    const txCalls = callOrder.filter((s) => !s.startsWith("PRAGMA"));
+    expect(txCalls).toEqual(["BEGIN TRANSACTION", "callback", "COMMIT"]);
   });
 
   it("rolls back on callback error", async () => {
@@ -45,7 +47,8 @@ describe("withTransaction", () => {
       }),
     ).rejects.toThrow("callback failed");
 
-    expect(callOrder).toEqual(["BEGIN TRANSACTION", "ROLLBACK"]);
+    const txCalls = callOrder.filter((s) => !s.startsWith("PRAGMA"));
+    expect(txCalls).toEqual(["BEGIN TRANSACTION", "ROLLBACK"]);
   });
 
   it("handles ROLLBACK failure gracefully (SQLite auto-rollback)", async () => {
