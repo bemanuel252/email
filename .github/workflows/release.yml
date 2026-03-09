@@ -233,7 +233,8 @@ jobs:
         if: steps.signing-check.outputs.has_signing != 'true'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          # Use a non-standard name so @tauri-apps/cli doesn't auto-load it
+          SIGNING_KEY_RAW: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
         run: |
           VERSION=$(node -p "require('./package.json').version")
           TAG="v${VERSION}"
@@ -244,12 +245,13 @@ jobs:
           TAR_FILE=$(ls /tmp/*.app.tar.gz | head -1)
           echo "Signing: $TAR_FILE"
 
-          # Write key to temp file so multiline content is preserved correctly
+          # Write key to temp file — avoid TAURI_SIGNING_PRIVATE_KEY env var
+          # so CLI doesn't try to use it as --private-key (conflicts with -f)
           KEY_FILE=$(mktemp /tmp/signing.XXXXXX.key)
           chmod 600 "$KEY_FILE"
-          printf '%s' "$TAURI_SIGNING_PRIVATE_KEY" > "$KEY_FILE"
+          printf '%s' "$SIGNING_KEY_RAW" > "$KEY_FILE"
 
-          # Sign — key has no password; pass empty string explicitly
+          # Sign with empty password (key was generated without a password)
           npx @tauri-apps/cli signer sign \
             -f "$KEY_FILE" \
             -p "" \
