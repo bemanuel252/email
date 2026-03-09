@@ -234,7 +234,6 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
-          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         run: |
           VERSION=$(node -p "require('./package.json').version")
           TAG="v${VERSION}"
@@ -245,10 +244,18 @@ jobs:
           TAR_FILE=$(ls /tmp/*.app.tar.gz | head -1)
           echo "Signing: $TAR_FILE"
 
-          # Sign with our updater key (no password — key was generated without one)
+          # Write key to temp file so multiline content is preserved correctly
+          KEY_FILE=$(mktemp /tmp/signing.XXXXXX.key)
+          chmod 600 "$KEY_FILE"
+          printf '%s' "$TAURI_SIGNING_PRIVATE_KEY" > "$KEY_FILE"
+
+          # Sign — key has no password; pass empty string explicitly
           npx @tauri-apps/cli signer sign \
-            -k "$TAURI_SIGNING_PRIVATE_KEY" \
+            -f "$KEY_FILE" \
+            -p "" \
             "$TAR_FILE"
+
+          rm -f "$KEY_FILE"
 
           SIGNATURE=$(cat "${TAR_FILE}.sig")
           PUB_DATE=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
