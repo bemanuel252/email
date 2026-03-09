@@ -5,6 +5,8 @@ import { navigateToLabel, navigateToSettings } from "@/router/navigate";
 import { useAccountStore } from "@/stores/accountStore";
 import { getSetting, setSetting, getSecureSetting, setSecureSetting } from "@/services/db/settings";
 import { PROVIDER_MODELS } from "@/services/ai/types";
+import { fetchModels, clearModelCache } from "@/services/ai/modelFetcher";
+import type { ModelOption } from "@/services/ai/types";
 import { deleteAccount } from "@/services/db/accounts";
 import { removeClient, reauthorizeAccount } from "@/services/gmail/tokenManager";
 import { triggerSync, forceFullSync, resyncAccount } from "@/services/gmail/syncManager";
@@ -128,6 +130,10 @@ export function SettingsPage() {
   const [aiKeySaved, setAiKeySaved] = useState(false);
   const [aiTesting, setAiTesting] = useState(false);
   const [aiTestResult, setAiTestResult] = useState<"success" | "fail" | null>(null);
+  const [dynamicModels, setDynamicModels] = useState<ModelOption[] | null>(null);
+  const [modelsFetching, setModelsFetching] = useState(false);
+  const [modelsFetchedAt, setModelsFetchedAt] = useState<number | null>(null);
+  const [modelsFetchError, setModelsFetchError] = useState<string | null>(null);
   const [aiAutoDraftEnabled, setAiAutoDraftEnabled] = useState(true);
   const [aiWritingStyleEnabled, setAiWritingStyleEnabled] = useState(true);
   const [styleAnalyzing, setStyleAnalyzing] = useState(false);
@@ -241,7 +247,53 @@ export function SettingsPage() {
       }
     }
     load();
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Fetch available models whenever provider or key changes
+  useEffect(() => {
+    setDynamicModels(null);
+    const key =
+      aiProvider === "claude" ? claudeApiKey
+      : aiProvider === "openai" ? openaiApiKey
+      : aiProvider === "copilot" ? copilotApiKey
+      : aiProvider === "gemini" ? geminiApiKey
+      : "local";
+    if (!key && aiProvider !== "ollama") return;
+    let cancelled = false;
+    setModelsFetching(true);
+    setModelsFetchError(null);
+    fetchModels(aiProvider, key, ollamaServerUrl).then((result) => {
+      if (cancelled) return;
+      setDynamicModels(result.models);
+      setModelsFetchedAt(result.fetchedAt);
+      setModelsFetchError(result.error);
+      setModelsFetching(false);
+    });
+    return () => { cancelled = true; };
+  }, [aiProvider, claudeApiKey, openaiApiKey, copilotApiKey, geminiApiKey, ollamaServerUrl]);
+
+  const loadModels = useCallback(
+    async (providerOverride?: typeof aiProvider, keyOverride?: string, serverUrlOverride?: string) => {
+      const provider = providerOverride ?? aiProvider;
+      const key =
+        keyOverride ??
+        (provider === "claude" ? claudeApiKey
+        : provider === "openai" ? openaiApiKey
+        : provider === "copilot" ? copilotApiKey
+        : provider === "gemini" ? geminiApiKey
+        : "local");
+      const serverUrl = serverUrlOverride ?? ollamaServerUrl;
+      if (!key && provider !== "ollama") return;
+      setModelsFetching(true);
+      setModelsFetchError(null);
+      const result = await fetchModels(provider, key, serverUrl);
+      setDynamicModels(result.models);
+      setModelsFetchedAt(result.fetchedAt);
+      setModelsFetchError(result.error);
+      setModelsFetching(false);
+    },
+    [aiProvider, claudeApiKey, openaiApiKey, copilotApiKey, geminiApiKey, ollamaServerUrl],
+  );
 
   const handleNotificationsToggle = useCallback(async () => {
     const newVal = !notificationsEnabled;
@@ -1081,13 +1133,51 @@ export function SettingsPage() {
                           onChange={(e) => setOllamaServerUrl(e.target.value)}
                           placeholder="http://localhost:11434"
                         />
-                        <TextField
-                          label="Model Name"
-                          size="md"
-                          value={ollamaModel}
-                          onChange={(e) => setOllamaModel(e.target.value)}
-                          placeholder="llama3.2"
-                        />
+                        <SettingRow label="Model">
+                          <div className="flex items-center gap-2">
+                            {dynamicModels && dynamicModels.length > 0 ? (
+                              <select
+                                value={ollamaModel}
+                                onChange={(e) => setOllamaModel(e.target.value)}
+                                className="flex-1 bg-bg-tertiary text-text-primary text-sm px-3 py-1.5 rounded-md border border-border-primary focus:border-accent outline-none"
+                              >
+                                {dynamicModels.map((m) => (
+                                  <option key={m.id} value={m.id}>{m.label}</option>
+                                ))}
+                              </select>
+                            ) : (
+                              <input
+                                type="text"
+                                value={ollamaModel}
+                                onChange={(e) => setOllamaModel(e.target.value)}
+                                placeholder="llama3.2"
+                                className="flex-1 bg-bg-tertiary text-text-primary text-sm px-3 py-1.5 rounded-md border border-border-primary focus:border-accent outline-none"
+                              />
+                            )}
+                            <button
+                              title="Refresh model list from Ollama"
+                              disabled={modelsFetching}
+                              onClick={() => loadModels("ollama", "local", ollamaServerUrl)}
+                              className="text-text-tertiary hover:text-text-primary disabled:opacity-40 transition-colors"
+                            >
+                              <svg
+                                xmlns="http://www.w3.org/2000/svg"
+                                viewBox="0 0 20 20"
+                                fill="currentColor"
+                                className={`w-4 h-4 ${modelsFetching ? "animate-spin" : ""}`}
+                              >
+                                <path
+                                  fillRule="evenodd"
+                                  d="M15.312 11.424a5.5 5.5 0 01-9.201 2.466l-.312-.311h2.433a.75.75 0 000-1.5H5.498a.75.75 0 00-.75.75v3.204a.75.75 0 001.5 0v-1.42l.311.311a7 7 0 0011.708-3.138.75.75 0 00-1.454-.355zm-1.933-7.003a7 7 0 00-11.708 3.138.75.75 0 001.454.354 5.5 5.5 0 019.201-2.466l.312.312H10.21a.75.75 0 000 1.5h3.734a.75.75 0 00.75-.75V2.501a.75.75 0 00-1.5 0v1.42l-.312-.312z"
+                                  clipRule="evenodd"
+                                />
+                              </svg>
+                            </button>
+                          </div>
+                          {modelsFetchError && aiProvider === "ollama" && (
+                            <p className="text-xs text-text-tertiary mt-1">Ollama not reachable — enter model name manually</p>
+                          )}
+                        </SettingRow>
                         <div className="flex items-center gap-2">
                           <Button
                             variant="primary"
@@ -1166,35 +1256,69 @@ export function SettingsPage() {
                           }
                         />
                         <SettingRow label="Model">
-                          <select
-                            value={
-                              aiProvider === "claude" ? claudeModel
-                              : aiProvider === "openai" ? openaiModel
-                              : aiProvider === "copilot" ? copilotModel
-                              : geminiModel
-                            }
-                            onChange={async (e) => {
-                              const val = e.target.value;
-                              const modelSettingMap = {
-                                claude: "claude_model",
-                                openai: "openai_model",
-                                gemini: "gemini_model",
-                                copilot: "copilot_model",
-                              } as const;
-                              if (aiProvider === "claude") setClaudeModel(val);
-                              else if (aiProvider === "openai") setOpenaiModel(val);
-                              else if (aiProvider === "copilot") setCopilotModel(val);
-                              else setGeminiModel(val);
-                              await setSetting(modelSettingMap[aiProvider], val);
-                              const { clearProviderClients } = await import("@/services/ai/providerManager");
-                              clearProviderClients();
-                            }}
-                            className="w-48 bg-bg-tertiary text-text-primary text-sm px-3 py-1.5 rounded-md border border-border-primary focus:border-accent outline-none"
-                          >
-                            {PROVIDER_MODELS[aiProvider].map((m) => (
-                              <option key={m.id} value={m.id}>{m.label}</option>
-                            ))}
-                          </select>
+                          <div className="flex items-center gap-2">
+                            <select
+                              value={
+                                aiProvider === "claude" ? claudeModel
+                                : aiProvider === "openai" ? openaiModel
+                                : aiProvider === "copilot" ? copilotModel
+                                : geminiModel
+                              }
+                              disabled={modelsFetching}
+                              onChange={async (e) => {
+                                const val = e.target.value;
+                                const modelSettingMap = {
+                                  claude: "claude_model",
+                                  openai: "openai_model",
+                                  gemini: "gemini_model",
+                                  copilot: "copilot_model",
+                                } as const;
+                                if (aiProvider === "claude") setClaudeModel(val);
+                                else if (aiProvider === "openai") setOpenaiModel(val);
+                                else if (aiProvider === "copilot") setCopilotModel(val);
+                                else setGeminiModel(val);
+                                await setSetting(modelSettingMap[aiProvider], val);
+                                const { clearProviderClients } = await import("@/services/ai/providerManager");
+                                clearProviderClients();
+                              }}
+                              className="w-48 bg-bg-tertiary text-text-primary text-sm px-3 py-1.5 rounded-md border border-border-primary focus:border-accent outline-none disabled:opacity-50"
+                            >
+                              {modelsFetching && <option value="">Loading models…</option>}
+                              {(dynamicModels ?? PROVIDER_MODELS[aiProvider]).map((m) => (
+                                <option key={m.id} value={m.id}>{m.label}</option>
+                              ))}
+                            </select>
+                            <button
+                              title="Refresh model list"
+                              disabled={modelsFetching}
+                              onClick={() => {
+                                clearModelCache(aiProvider);
+                                loadModels();
+                              }}
+                              className="text-text-tertiary hover:text-text-primary disabled:opacity-40 transition-colors"
+                            >
+                              <svg
+                                xmlns="http://www.w3.org/2000/svg"
+                                viewBox="0 0 20 20"
+                                fill="currentColor"
+                                className={`w-4 h-4 ${modelsFetching ? "animate-spin" : ""}`}
+                              >
+                                <path
+                                  fillRule="evenodd"
+                                  d="M15.312 11.424a5.5 5.5 0 01-9.201 2.466l-.312-.311h2.433a.75.75 0 000-1.5H5.498a.75.75 0 00-.75.75v3.204a.75.75 0 001.5 0v-1.42l.311.311a7 7 0 0011.708-3.138.75.75 0 00-1.454-.355zm-1.933-7.003a7 7 0 00-11.708 3.138.75.75 0 001.454.354 5.5 5.5 0 019.201-2.466l.312.312H10.21a.75.75 0 000 1.5h3.734a.75.75 0 00.75-.75V2.501a.75.75 0 00-1.5 0v1.42l-.312-.312z"
+                                  clipRule="evenodd"
+                                />
+                              </svg>
+                            </button>
+                          </div>
+                          {modelsFetchError && (
+                            <p className="text-xs text-text-tertiary mt-1">Using cached list — {modelsFetchError}</p>
+                          )}
+                          {!modelsFetchError && modelsFetchedAt && (
+                            <p className="text-xs text-text-tertiary mt-1">
+                              Updated {Math.round((Date.now() - modelsFetchedAt) / 60000) || "<1"} min ago
+                            </p>
+                          )}
                         </SettingRow>
                         <div className="flex items-center gap-2">
                           <Button
@@ -1216,6 +1340,8 @@ export function SettingsPage() {
                                 await setSecureSetting(keySettingMap[aiProvider], keyValue);
                                 const { clearProviderClients } = await import("@/services/ai/providerManager");
                                 clearProviderClients();
+                                clearModelCache(aiProvider);
+                                loadModels(aiProvider, keyValue);
                               }
                               setAiKeySaved(true);
                               setTimeout(() => setAiKeySaved(false), 2000);
