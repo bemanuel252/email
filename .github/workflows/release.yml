@@ -245,10 +245,9 @@ jobs:
           TAR_FILE=$(ls /tmp/*.app.tar.gz | head -1)
           echo "Signing: $TAR_FILE"
 
-          # Sign with our updater key (-p "" = empty password)
+          # Sign with our updater key (no password — key was generated without one)
           npx @tauri-apps/cli signer sign \
             -k "$TAURI_SIGNING_PRIVATE_KEY" \
-            -p "${TAURI_SIGNING_PRIVATE_KEY_PASSWORD}" \
             "$TAR_FILE"
 
           SIGNATURE=$(cat "${TAR_FILE}.sig")
