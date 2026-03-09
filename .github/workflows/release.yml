@@ -194,6 +194,7 @@ jobs:
 
       - name: Build and upload (unsigned)
         if: steps.signing-check.outputs.has_signing != 'true' && inputs.release_id
+        id: build-upload-unsigned
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -206,6 +207,7 @@ jobs:
 
       - name: Build and release (unsigned)
         if: steps.signing-check.outputs.has_signing != 'true' && !inputs.release_id
+        id: build-release-unsigned
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -226,6 +228,43 @@ jobs:
           prerelease: false
           updaterJsonKeepUniversal: true
           args: --target universal-apple-darwin
+
+      - name: Generate and upload latest.json for updater
+        if: steps.signing-check.outputs.has_signing != 'true'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          TAG="v${VERSION}"
+
+          # Find the .sig file produced by the build
+          SIG_FILE=$(find src-tauri/target/universal-apple-darwin/release/bundle/macos \
+            -name "*.app.tar.gz.sig" | head -1)
+
+          if [ -z "$SIG_FILE" ]; then
+            echo "No .sig file found — skipping latest.json upload"
+            exit 0
+          fi
+
+          SIGNATURE=$(cat "$SIG_FILE")
+          PUB_DATE=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+          DOWNLOAD_URL="https://github.com/${{ github.repository }}/releases/download/${TAG}/Email_universal.app.tar.gz"
+
+          cat > latest.json <<EOF
+          {
+            "version": "${VERSION}",
+            "notes": "See the release page for details.",
+            "pub_date": "${PUB_DATE}",
+            "platforms": {
+              "darwin-universal": {
+                "signature": "${SIGNATURE}",
+                "url": "${DOWNLOAD_URL}"
+              }
+            }
+          }
+          EOF
+
+          gh release upload "${TAG}" latest.json --clobber
 
       - name: Clean up keychain
         if: always() && steps.signing-check.outputs.has_signing == 'true'
