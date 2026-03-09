@@ -233,24 +233,29 @@ jobs:
         if: steps.signing-check.outputs.has_signing != 'true'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         run: |
           VERSION=$(node -p "require('./package.json').version")
           TAG="v${VERSION}"
 
-          # Find the .sig file produced by the build
-          SIG_FILE=$(find src-tauri/target/universal-apple-darwin/release/bundle/macos \
-            -name "*.app.tar.gz.sig" | head -1)
+          # Download the exact .tar.gz that was uploaded to the release
+          # so we sign the same bytes the user will download
+          gh release download "${TAG}" --pattern "*.app.tar.gz" --dir /tmp --clobber
+          TAR_FILE=$(ls /tmp/*.app.tar.gz | head -1)
+          echo "Signing: $TAR_FILE"
 
-          if [ -z "$SIG_FILE" ]; then
-            echo "No .sig file found — skipping latest.json upload"
-            exit 0
-          fi
+          # Sign with our updater key (-p "" = empty password)
+          npx @tauri-apps/cli signer sign \
+            -k "$TAURI_SIGNING_PRIVATE_KEY" \
+            -p "${TAURI_SIGNING_PRIVATE_KEY_PASSWORD}" \
+            "$TAR_FILE"
 
-          SIGNATURE=$(cat "$SIG_FILE")
+          SIGNATURE=$(cat "${TAR_FILE}.sig")
           PUB_DATE=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
           DOWNLOAD_URL="https://github.com/${{ github.repository }}/releases/download/${TAG}/Email_universal.app.tar.gz"
 
-          cat > latest.json <<EOF
+          cat > /tmp/latest.json << EOF
           {
             "version": "${VERSION}",
             "notes": "See the release page for details.",
@@ -264,7 +269,8 @@ jobs:
           }
           EOF
 
-          gh release upload "${TAG}" latest.json --clobber
+          gh release upload "${TAG}" /tmp/latest.json --clobber
+          echo "latest.json uploaded successfully"
 
       - name: Clean up keychain
         if: always() && steps.signing-check.outputs.has_signing == 'true'
