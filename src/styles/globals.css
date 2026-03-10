@@ -432,7 +432,55 @@ body {
 }
 
 /* ============================================
- * Visual Theme: Superhuman
+ * Visual Theme: Superhuman — Light variant
+ * Applied when .theme-superhuman WITHOUT .dark
+ * Clean white, Superhuman-style minimal light
+ * ============================================ */
+.theme-superhuman:not(.dark) {
+  --color-bg-primary: #FAFAFA;
+  --color-bg-secondary: #F3F3F5;
+  --color-bg-tertiary: #E8E8EC;
+  --color-bg-hover: rgba(0, 0, 0, 0.04);
+  --color-bg-selected: rgba(108, 142, 239, 0.10);
+
+  --color-text-primary: #1A1A1A;
+  --color-text-secondary: #58586A;
+  --color-text-tertiary: #9898AA;
+
+  --color-border-primary: rgba(0, 0, 0, 0.08);
+  --color-border-secondary: rgba(0, 0, 0, 0.04);
+
+  --color-accent: #6C8EEF;
+  --color-accent-hover: #5A7AE8;
+  --color-accent-light: rgba(108, 142, 239, 0.12);
+
+  --color-sidebar-bg: #EBEBEE;
+  --color-sidebar-text: #1A1A1A;
+  --color-sidebar-hover: rgba(0, 0, 0, 0.06);
+  --color-sidebar-active: #6C8EEF;
+
+  --glass-blur: 0px;
+  --glass-blur-heavy: 4px;
+  --glass-border: rgba(0, 0, 0, 0.06);
+  --glass-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+  --glass-shadow-elevated: 0 8px 24px rgba(0, 0, 0, 0.10);
+  --glass-highlight: none;
+}
+
+.theme-superhuman:not(.dark) body {
+  background: #FAFAFA;
+}
+
+.theme-superhuman:not(.dark) .animated-bg {
+  display: none;
+}
+
+.theme-superhuman:not(.dark) #root::before {
+  display: none;
+}
+
+/* ============================================
+ * Visual Theme: Superhuman — Dark variant
  * Carbon — deep neutral dark with soft indigo accent
  * ============================================ */
 .theme-superhuman {

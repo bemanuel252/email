@@ -1,11 +1,13 @@
 import { useState, useEffect } from "react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { Minus, Square, X, Copy } from "lucide-react";
+import { Minus, Square, X, Copy, Menu } from "lucide-react";
+import { useUIStore } from "@/stores/uiStore";
 
 const isMac = navigator.userAgent.includes("Macintosh");
 
 export function TitleBar() {
   const [maximized, setMaximized] = useState(false);
+  const toggleSidebar = useUIStore((s) => s.toggleSidebar);
 
   useEffect(() => {
     const appWindow = getCurrentWindow();
@@ -30,7 +32,14 @@ export function TitleBar() {
       className="flex items-center justify-between h-9 bg-sidebar-bg border-b border-border-primary select-none shrink-0"
     >
       {/* App title — left side (extra padding on macOS for traffic light buttons) */}
-      <div data-tauri-drag-region className={`flex items-center gap-2 ${isMac ? "pl-20" : "pl-4"}`}>
+      <div className={`flex items-center gap-2 ${isMac ? "pl-20" : "pl-2"}`}>
+        <button
+          onClick={toggleSidebar}
+          title="Toggle sidebar"
+          className="p-1.5 text-sidebar-text/50 hover:text-sidebar-text hover:bg-sidebar-hover rounded transition-colors"
+        >
+          <Menu size={15} />
+        </button>
         <span data-tauri-drag-region className="text-xs font-semibold text-sidebar-text tracking-wide">
           Email
         </span>

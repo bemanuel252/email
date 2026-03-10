@@ -533,13 +533,18 @@ export default function App() {
     // Clear any inline accent overrides — theme CSS handles everything
     for (const p of ACCENT_PROPS) root.style.removeProperty(p);
 
-    // Superhuman always forces dark mode.
-    // Gmail/Outlook respect the user's theme setting — the theme effect above handles dark/light.
+    // Superhuman: respect the user's theme setting — add dark only when the effective theme is dark.
+    // Gmail/Outlook also respect the user's theme setting — the theme effect above handles dark/light.
     if (visualTheme === "superhuman") {
-      root.classList.add("dark");
+      const prefersDark =
+        theme === "dark" ||
+        (theme === "system" && window.matchMedia("(prefers-color-scheme: dark)").matches);
+      if (prefersDark) {
+        root.classList.add("dark");
+      }
     }
     // For gmail/outlook: do NOT remove .dark — let the theme effect manage it.
-  }, [visualTheme]);
+  }, [visualTheme, theme]);
 
   const handleAddAccountSuccess = useCallback(async () => {
     setShowAddAccount(false);
