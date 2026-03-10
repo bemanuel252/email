@@ -11,6 +11,7 @@ export type RuleType =
   | "from_name_contains"
   | "subject_contains"
   | "has_label"
+  | "contact_tag"
   | "to_address"
   | "is_unread"
   | "is_starred"
@@ -90,6 +91,11 @@ export function buildRuleClause(rule: SplitRule, paramOffset: number): RuleClaus
       // Proxy: threads Gmail categorized as Promotions or Newsletters
       sql = `EXISTS (SELECT 1 FROM thread_labels tl2 WHERE tl2.account_id = t.account_id AND tl2.thread_id = t.id AND tl2.label_id IN ('CATEGORY_PROMOTIONS', 'CATEGORY_NEWSLETTERS'))`;
       break;
+    case "contact_tag": {
+      params.push(`%"${escapeLike(rule.ruleValue ?? "")}"%`);
+      sql = `EXISTS (SELECT 1 FROM crm_contacts cc WHERE cc.email = m.from_address AND cc.tags_json LIKE $${idx++} ESCAPE '\\')`;
+      break;
+    }
     default:
       sql = `1=0`; // Unknown rule — never matches
   }
@@ -129,6 +135,7 @@ export const RULE_TYPE_LABELS: Record<RuleType, string> = {
   from_name_contains: "Sender name contains",
   subject_contains: "Subject contains",
   has_label: "Has label",
+  contact_tag: "Contact tag",
   to_address: "To address",
   is_unread: "Is unread",
   is_starred: "Is starred",
@@ -143,6 +150,7 @@ export const RULE_TYPE_HAS_VALUE: Record<RuleType, boolean> = {
   from_name_contains: true,
   subject_contains: true,
   has_label: true,
+  contact_tag: true,
   to_address: true,
   is_unread: false,
   is_starred: false,
@@ -155,7 +163,8 @@ export const RULE_TYPE_PLACEHOLDER: Record<RuleType, string> = {
   from_address: "e.g. *@github.com",
   from_name_contains: "e.g. GitHub",
   subject_contains: "e.g. Invoice",
-  has_label: "e.g. INBOX, STARRED",
+  has_label: "Select a label",
+  contact_tag: "e.g. active client",
   to_address: "e.g. me@example.com",
   is_unread: "",
   is_starred: "",

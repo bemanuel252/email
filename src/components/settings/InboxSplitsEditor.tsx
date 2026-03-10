@@ -1,5 +1,20 @@
 import { useState, useCallback, useRef } from "react";
 import {
+  DndContext,
+  closestCenter,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from "@dnd-kit/core";
+import {
+  SortableContext,
+  useSortable,
+  verticalListSortingStrategy,
+  arrayMove,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
+import {
   Plus, Trash2, GripVertical, ChevronDown, ChevronRight, X,
   Sparkles, Loader2, Bot, Info,
 } from "lucide-react";
@@ -7,6 +22,7 @@ import { useInboxSplitsStore } from "@/stores/inboxSplitsStore";
 import { useAccountStore } from "@/stores/accountStore";
 import { useUIStore } from "@/stores/uiStore";
 import type { InboxSplit, InboxSplitRule } from "@/services/db/inboxSplits";
+import { getLabelsForAccount, type DbLabel } from "@/services/db/labels";
 import {
   RULE_TYPE_LABELS,
   RULE_TYPE_HAS_VALUE,
@@ -29,6 +45,7 @@ const ALL_RULE_TYPES: RuleType[] = [
   "from_name_contains",
   "subject_contains",
   "has_label",
+  "contact_tag",
   "to_address",
   "is_unread",
   "is_starred",
@@ -57,6 +74,24 @@ interface SplitFormState {
 
 function newRuleForm(): RuleFormItem {
   return { id: crypto.randomUUID(), ruleType: "from_domain", ruleValue: "" };
+}
+
+/** Hoisted to module scope so SortableSplitRow can reference it. */
+function splitToForm(split: InboxSplit): SplitFormState {
+  return {
+    id: split.id,
+    name: split.name,
+    icon: split.icon ?? "📥",
+    ruleOperator: split.ruleOperator,
+    isCatchAll: split.isCatchAll,
+    aiDescription: split.aiDescription ?? "",
+    aiClassificationEnabled: split.aiClassificationEnabled,
+    rules: split.rules.map((r) => ({
+      id: r.id,
+      ruleType: r.ruleType,
+      ruleValue: r.ruleValue ?? "",
+    })),
+  };
 }
 
 // ─── Natural Language Rule Builder ────────────────────────────────────────────
@@ -128,11 +163,13 @@ function NlRuleBuilder({
 function SplitEditor({
   initial,
   topDomains,
+  labels,
   onSave,
   onCancel,
 }: {
   initial: SplitFormState;
   topDomains: string[];
+  labels: DbLabel[];
   onSave: (form: SplitFormState) => void;
   onCancel: () => void;
 }) {
@@ -255,17 +292,34 @@ function SplitEditor({
                     <option key={rt} value={rt}>{RULE_TYPE_LABELS[rt]}</option>
                   ))}
                 </select>
+
                 {RULE_TYPE_HAS_VALUE[rule.ruleType] ? (
-                  <input
-                    type="text"
-                    value={rule.ruleValue}
-                    onChange={(e) => updateRule(rule.id, { ruleValue: e.target.value })}
-                    placeholder={RULE_TYPE_PLACEHOLDER[rule.ruleType]}
-                    className="flex-1 bg-bg-tertiary border border-border-primary rounded px-2 py-1.5 text-xs text-text-primary placeholder:text-text-tertiary focus:outline-none focus:ring-1 focus:ring-accent"
-                  />
+                  rule.ruleType === "has_label" && labels.length > 0 ? (
+                    <select
+                      value={rule.ruleValue}
+                      onChange={(e) => updateRule(rule.id, { ruleValue: e.target.value })}
+                      className="flex-1 bg-bg-tertiary border border-border-primary rounded px-2 py-1.5 text-xs text-text-primary focus:outline-none focus:ring-1 focus:ring-accent"
+                    >
+                      <option value="">Select label…</option>
+                      {labels.map((l) => (
+                        <option key={l.id} value={l.id}>
+                          {l.name}
+                        </option>
+                      ))}
+                    </select>
+                  ) : (
+                    <input
+                      type="text"
+                      value={rule.ruleValue}
+                      onChange={(e) => updateRule(rule.id, { ruleValue: e.target.value })}
+                      placeholder={RULE_TYPE_PLACEHOLDER[rule.ruleType]}
+                      className="flex-1 bg-bg-tertiary border border-border-primary rounded px-2 py-1.5 text-xs text-text-primary placeholder:text-text-tertiary focus:outline-none focus:ring-1 focus:ring-accent"
+                    />
+                  )
                 ) : (
                   <span className="flex-1 text-xs text-text-tertiary italic">No value needed</span>
                 )}
+
                 <button
                   onClick={() => removeRule(rule.id)}
                   className="p-1 text-text-tertiary hover:text-error transition-colors rounded shrink-0"
@@ -378,6 +432,122 @@ function AiClassifyButton({ accountId }: { accountId: string }) {
   );
 }
 
+// ─── Sortable Split Row ────────────────────────────────────────────────────────
+
+function SortableSplitRow({
+  split,
+  isExpanded,
+  topDomains,
+  labels,
+  onExpand,
+  onDelete,
+  onToggleEnabled,
+  onSave,
+  onCancel,
+}: {
+  split: InboxSplit;
+  isExpanded: boolean;
+  topDomains: string[];
+  labels: DbLabel[];
+  onExpand: () => void;
+  onDelete: () => void;
+  onToggleEnabled: () => void;
+  onSave: (form: SplitFormState) => void;
+  onCancel: () => void;
+}) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: split.id });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.4 : 1,
+    zIndex: isDragging ? 10 : undefined,
+  };
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      className="border rounded-xl border-border-primary bg-bg-primary"
+    >
+      {isExpanded ? (
+        <SplitEditor
+          initial={splitToForm(split)}
+          topDomains={topDomains}
+          labels={labels}
+          onSave={onSave}
+          onCancel={onCancel}
+        />
+      ) : (
+        <div className="flex items-center gap-2 px-3 py-2.5">
+          <GripVertical
+            size={14}
+            className="text-text-tertiary cursor-grab shrink-0 touch-none"
+            {...attributes}
+            {...listeners}
+          />
+          <span className="text-base leading-none shrink-0">{split.icon ?? "📥"}</span>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-1.5">
+              <span className="text-sm font-medium text-text-primary truncate">{split.name}</span>
+              {split.isCatchAll && (
+                <span className="text-[0.6rem] text-text-tertiary border border-border-secondary rounded px-1 py-0.5">catch-all</span>
+              )}
+              {split.aiClassificationEnabled && (
+                <span title="AI classification enabled">
+                  <Bot size={11} className="text-accent shrink-0" />
+                </span>
+              )}
+            </div>
+            {!split.isCatchAll && (
+              <p className="text-xs text-text-tertiary mt-0.5 truncate">
+                {split.rules.length} rule{split.rules.length !== 1 ? "s" : ""}
+                {split.rules.length > 1 && ` · ${split.ruleOperator}`}
+                {split.aiDescription && ` · ${split.aiDescription}`}
+              </p>
+            )}
+          </div>
+
+          {/* Enabled toggle */}
+          <button
+            onClick={(e) => { e.stopPropagation(); onToggleEnabled(); }}
+            title={split.isEnabled ? "Disable tab" : "Enable tab"}
+            className={`relative w-8 h-4 rounded-full transition-colors shrink-0 ${
+              split.isEnabled ? "bg-accent" : "bg-bg-tertiary border border-border-primary"
+            }`}
+          >
+            <span
+              className={`absolute top-0.5 w-3 h-3 rounded-full bg-white shadow transition-transform ${
+                split.isEnabled ? "left-[18px]" : "left-0.5"
+              }`}
+            />
+          </button>
+
+          <button
+            onClick={onExpand}
+            className="p-1 text-text-tertiary hover:text-text-primary transition-colors rounded"
+          >
+            {isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+          </button>
+          <button
+            onClick={onDelete}
+            className="p-1 text-text-tertiary hover:text-error transition-colors rounded"
+          >
+            <Trash2 size={13} />
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Main Editor ───────────────────────────────────────────────────────────────
 
 export function InboxSplitsEditor() {
@@ -389,9 +559,10 @@ export function InboxSplitsEditor() {
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [addingNew, setAddingNew] = useState(false);
   const [showWizard, setShowWizard] = useState(false);
-  const [draggedId, setDraggedId] = useState<string | null>(null);
-  const [dragOverId, setDragOverId] = useState<string | null>(null);
   const [topDomains, setTopDomains] = useState<string[]>([]);
+  const [labels, setLabels] = useState<DbLabel[]>([]);
+
+  const sensors = useSensors(useSensor(PointerSensor));
 
   // Load top domains once for NL rule builder context
   const loadTopDomains = useCallback(async () => {
@@ -401,6 +572,20 @@ export function InboxSplitsEditor() {
       setTopDomains(patterns.slice(0, 30).map((p) => p.domain));
     } catch { /* ignore */ }
   }, [activeAccountId, topDomains.length]);
+
+  // Load account labels for "has_label" rule autocomplete
+  const loadLabels = useCallback(async () => {
+    if (!activeAccountId || labels.length > 0) return;
+    try {
+      const result = await getLabelsForAccount(activeAccountId);
+      setLabels(result);
+    } catch { /* ignore */ }
+  }, [activeAccountId, labels.length]);
+
+  const loadContext = useCallback(() => {
+    loadTopDomains();
+    loadLabels();
+  }, [loadTopDomains, loadLabels]);
 
   const handleSave = useCallback(
     async (form: SplitFormState) => {
@@ -463,39 +648,19 @@ export function InboxSplitsEditor() {
     [activeAccountId, splitsStore],
   );
 
-  const handleDrop = useCallback(
-    async (targetId: string) => {
-      if (!activeAccountId || !draggedId || draggedId === targetId) return;
+  const handleDragEnd = useCallback(
+    async (event: DragEndEvent) => {
+      const { active, over } = event;
+      if (!over || active.id === over.id || !activeAccountId) return;
       const ids = splits.map((s) => s.id);
-      const from = ids.indexOf(draggedId);
-      const to = ids.indexOf(targetId);
-      if (from === -1 || to === -1) return;
-      const reordered = [...ids];
-      reordered.splice(from, 1);
-      reordered.splice(to, 0, draggedId);
+      const oldIndex = ids.indexOf(active.id as string);
+      const newIndex = ids.indexOf(over.id as string);
+      if (oldIndex === -1 || newIndex === -1) return;
+      const reordered = arrayMove(ids, oldIndex, newIndex);
       await splitsStore.moveSplit(activeAccountId, reordered);
-      setDraggedId(null);
-      setDragOverId(null);
     },
-    [activeAccountId, draggedId, splits, splitsStore],
+    [activeAccountId, splits, splitsStore],
   );
-
-  function splitToForm(split: InboxSplit): SplitFormState {
-    return {
-      id: split.id,
-      name: split.name,
-      icon: split.icon ?? "📥",
-      ruleOperator: split.ruleOperator,
-      isCatchAll: split.isCatchAll,
-      aiDescription: split.aiDescription ?? "",
-      aiClassificationEnabled: split.aiClassificationEnabled,
-      rules: split.rules.map((r) => ({
-        id: r.id,
-        ruleType: r.ruleType,
-        ruleValue: r.ruleValue ?? "",
-      })),
-    };
-  }
 
   if (!activeAccountId) {
     return <p className="text-sm text-text-tertiary">No account selected.</p>;
@@ -530,88 +695,33 @@ export function InboxSplitsEditor() {
           <p className="text-xs text-text-quaternary">Use "Set up with AI" to get started instantly, or add tabs manually.</p>
         </div>
       ) : (
-        <div className="space-y-2">
-          {splits.map((split) => {
-            const isExpanded = expandedId === split.id;
-            const isDragOver = dragOverId === split.id;
-
-            return (
-              <div
-                key={split.id}
-                className={`border rounded-xl transition-all ${
-                  isDragOver ? "border-accent bg-accent/5" : "border-border-primary bg-bg-primary"
-                } ${draggedId === split.id ? "opacity-40 scale-[0.98]" : ""}`}
-                draggable
-                onDragStart={() => setDraggedId(split.id)}
-                onDragEnd={() => { setDraggedId(null); setDragOverId(null); }}
-                onDragOver={(e) => { e.preventDefault(); setDragOverId(split.id); }}
-                onDrop={() => handleDrop(split.id)}
-              >
-                {isExpanded ? (
-                  <SplitEditor
-                    initial={splitToForm(split)}
-                    topDomains={topDomains}
-                    onSave={handleSave}
-                    onCancel={() => setExpandedId(null)}
-                  />
-                ) : (
-                  <div className="flex items-center gap-2 px-3 py-2.5">
-                    <GripVertical size={14} className="text-text-tertiary cursor-grab shrink-0" />
-                    <span className="text-base leading-none shrink-0">{split.icon ?? "📥"}</span>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-1.5">
-                        <span className="text-sm font-medium text-text-primary truncate">{split.name}</span>
-                        {split.isCatchAll && (
-                          <span className="text-[0.6rem] text-text-tertiary border border-border-secondary rounded px-1 py-0.5">catch-all</span>
-                        )}
-                        {split.aiClassificationEnabled && (
-                          <span title="AI classification enabled">
-                            <Bot size={11} className="text-accent shrink-0" />
-                          </span>
-                        )}
-                      </div>
-                      {!split.isCatchAll && (
-                        <p className="text-xs text-text-tertiary mt-0.5 truncate">
-                          {split.rules.length} rule{split.rules.length !== 1 ? "s" : ""}
-                          {split.rules.length > 1 && ` · ${split.ruleOperator}`}
-                          {split.aiDescription && ` · ${split.aiDescription}`}
-                        </p>
-                      )}
-                    </div>
-
-                    {/* Enabled toggle */}
-                    <button
-                      onClick={(e) => { e.stopPropagation(); handleToggleEnabled(split); }}
-                      title={split.isEnabled ? "Disable tab" : "Enable tab"}
-                      className={`relative w-8 h-4 rounded-full transition-colors shrink-0 ${
-                        split.isEnabled ? "bg-accent" : "bg-bg-tertiary border border-border-primary"
-                      }`}
-                    >
-                      <span
-                        className={`absolute top-0.5 w-3 h-3 rounded-full bg-white shadow transition-transform ${
-                          split.isEnabled ? "left-[18px]" : "left-0.5"
-                        }`}
-                      />
-                    </button>
-
-                    <button
-                      onClick={() => { setExpandedId(split.id); loadTopDomains(); }}
-                      className="p-1 text-text-tertiary hover:text-text-primary transition-colors rounded"
-                    >
-                      {isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-                    </button>
-                    <button
-                      onClick={() => handleDelete(split.id)}
-                      className="p-1 text-text-tertiary hover:text-error transition-colors rounded"
-                    >
-                      <Trash2 size={13} />
-                    </button>
-                  </div>
-                )}
-              </div>
-            );
-          })}
-        </div>
+        <DndContext
+          sensors={sensors}
+          collisionDetection={closestCenter}
+          onDragEnd={handleDragEnd}
+        >
+          <SortableContext
+            items={splits.map((s) => s.id)}
+            strategy={verticalListSortingStrategy}
+          >
+            <div className="space-y-2">
+              {splits.map((split) => (
+                <SortableSplitRow
+                  key={split.id}
+                  split={split}
+                  isExpanded={expandedId === split.id}
+                  topDomains={topDomains}
+                  labels={labels}
+                  onExpand={() => { setExpandedId(split.id); loadContext(); }}
+                  onDelete={() => handleDelete(split.id)}
+                  onToggleEnabled={() => handleToggleEnabled(split)}
+                  onSave={handleSave}
+                  onCancel={() => setExpandedId(null)}
+                />
+              ))}
+            </div>
+          </SortableContext>
+        </DndContext>
       )}
 
       {/* Add new form */}
@@ -629,6 +739,7 @@ export function InboxSplitsEditor() {
               rules: [newRuleForm()],
             }}
             topDomains={topDomains}
+            labels={labels}
             onSave={handleSave}
             onCancel={() => setAddingNew(false)}
           />
@@ -637,7 +748,7 @@ export function InboxSplitsEditor() {
 
       {!addingNew && (
         <button
-          onClick={() => { setAddingNew(true); loadTopDomains(); }}
+          onClick={() => { setAddingNew(true); loadContext(); }}
           className="flex items-center gap-2 w-full px-3 py-2.5 text-sm text-text-tertiary hover:text-text-secondary border border-dashed border-border-primary hover:border-border-hover rounded-xl transition-colors"
         >
           <Plus size={14} />
@@ -646,7 +757,7 @@ export function InboxSplitsEditor() {
       )}
 
       <p className="text-xs text-text-tertiary pt-0.5">
-        Drag to reorder. Threads match the first tab whose rules they satisfy.
+        Drag the grip handle to reorder. Threads match the first tab whose rules they satisfy.
       </p>
 
       {/* AI Wizard Modal */}
