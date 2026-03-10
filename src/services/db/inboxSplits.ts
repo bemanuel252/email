@@ -189,7 +189,9 @@ export async function reorderSplits(accountId: string, splitIds: string[]): Prom
   }
 }
 
-const INBOX_THREADS_SELECT = `
+function buildSplitThreadsSelect(inboxOnly: boolean): string {
+  if (inboxOnly) {
+    return `
   SELECT DISTINCT
     t.id, t.account_id, t.subject, t.snippet, t.last_message_at, t.message_count,
     t.is_read, t.is_starred, t.is_important, t.has_attachments, t.is_snoozed,
@@ -199,14 +201,27 @@ const INBOX_THREADS_SELECT = `
   INNER JOIN thread_labels tl ON tl.account_id = t.account_id AND tl.thread_id = t.id
   LEFT JOIN messages m ON m.account_id = t.account_id AND m.thread_id = t.id
     AND m.date = (SELECT MAX(m2.date) FROM messages m2 WHERE m2.account_id = t.account_id AND m2.thread_id = t.id)
-  WHERE t.account_id = $1 AND tl.label_id = 'INBOX'
-`;
+  WHERE t.account_id = $1 AND tl.label_id = 'INBOX'`;
+  } else {
+    return `
+  SELECT DISTINCT
+    t.id, t.account_id, t.subject, t.snippet, t.last_message_at, t.message_count,
+    t.is_read, t.is_starred, t.is_important, t.has_attachments, t.is_snoozed,
+    t.snooze_until, t.is_pinned, t.is_muted,
+    m.from_name, m.from_address
+  FROM threads t
+  LEFT JOIN messages m ON m.account_id = t.account_id AND m.thread_id = t.id
+    AND m.date = (SELECT MAX(m2.date) FROM messages m2 WHERE m2.account_id = t.account_id AND m2.thread_id = t.id)
+  WHERE t.account_id = $1`;
+  }
+}
 
 export async function getThreadsForSplit(
   accountId: string,
   split: InboxSplit,
   limit = 50,
   offset = 0,
+  inboxOnly = true,
 ): Promise<DbThread[]> {
   const db = await getDb();
   const params: unknown[] = [accountId];
@@ -235,7 +250,7 @@ export async function getThreadsForSplit(
   const limitIdx = params.length - 1;
   const offsetIdx = params.length;
 
-  const sql = `${INBOX_THREADS_SELECT}
+  const sql = `${buildSplitThreadsSelect(inboxOnly)}
     AND (${ruleClauses.join(" OR ")})
     GROUP BY t.account_id, t.id
     ORDER BY t.last_message_at DESC
@@ -249,6 +264,7 @@ export async function getThreadsForCatchAllSplit(
   otherSplits: InboxSplit[],
   limit = 50,
   offset = 0,
+  inboxOnly = true,
 ): Promise<DbThread[]> {
   const db = await getDb();
   const params: unknown[] = [accountId];
@@ -280,7 +296,7 @@ export async function getThreadsForCatchAllSplit(
   const limitIdx = params.length - 1;
   const offsetIdx = params.length;
 
-  const sql = `${INBOX_THREADS_SELECT}
+  const sql = `${buildSplitThreadsSelect(inboxOnly)}
     ${notMatchedClause}
     GROUP BY t.account_id, t.id
     ORDER BY t.last_message_at DESC

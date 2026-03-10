@@ -10,6 +10,7 @@ export type DefaultReplyMode = "reply" | "replyAll";
 export type MarkAsReadBehavior = "instant" | "2s" | "manual";
 export type FontScale = "small" | "default" | "large" | "xlarge";
 export type InboxViewMode = "unified" | "split" | "custom-split";
+export type SplitScope = "inbox" | "all";
 export type VisualTheme = "default" | "superhuman" | "gmail" | "outlook";
 
 export interface SidebarNavItem {
@@ -32,6 +33,7 @@ interface UIState {
   visualTheme: VisualTheme;
   sendAndArchive: boolean;
   inboxViewMode: InboxViewMode;
+  splitScope: SplitScope;
   taskSidebarVisible: boolean;
   sidebarNavConfig: SidebarNavItem[] | null;
   reduceMotion: boolean;
@@ -54,6 +56,7 @@ interface UIState {
   setVisualTheme: (theme: VisualTheme) => void;
   setSendAndArchive: (enabled: boolean) => void;
   setInboxViewMode: (mode: InboxViewMode) => void;
+  setSplitScope: (scope: SplitScope) => void;
   toggleTaskSidebar: () => void;
   setTaskSidebarVisible: (visible: boolean) => void;
   setSidebarNavConfig: (config: SidebarNavItem[]) => void;
@@ -79,6 +82,7 @@ export const useUIStore = create<UIState>((set) => ({
   visualTheme: "default",
   sendAndArchive: false,
   inboxViewMode: "unified",
+  splitScope: "inbox",
   taskSidebarVisible: false,
   sidebarNavConfig: null,
   reduceMotion: false,
@@ -147,6 +151,10 @@ export const useUIStore = create<UIState>((set) => ({
   setInboxViewMode: (inboxViewMode) => {
     setSetting("inbox_view_mode", inboxViewMode).catch(() => {});
     set({ inboxViewMode });
+  },
+  setSplitScope: (splitScope) => {
+    setSetting("split_scope", splitScope).catch(() => {});
+    set({ splitScope });
   },
   toggleTaskSidebar: () =>
     set((state) => {

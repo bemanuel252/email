@@ -93,6 +93,7 @@ export function EmailList({ width, listRef, fullScreen }: { width?: number; list
   const activeSmartFolder = smartFolderId ? smartFolders.find((f) => f.id === smartFolderId) ?? null : null;
 
   const inboxViewMode = useUIStore((s) => s.inboxViewMode);
+  const splitScope = useUIStore((s) => s.splitScope);
   const routerCategory = useActiveCategory();
   const splitsStore = useInboxSplitsStore();
 
@@ -356,13 +357,14 @@ export function EmailList({ width, listRef, fullScreen }: { width?: number; list
         let dbThreads;
         // Custom split mode
         if (activeLabel === "inbox" && inboxViewMode === "custom-split" && activeCategory !== "All") {
+          const inboxOnly = splitScope === "inbox";
           const split = splitsStore.splits.find((s) => s.id === activeCategory);
           if (split) {
             if (split.isCatchAll) {
               const others = splitsStore.splits.filter((s) => s.isEnabled && !s.isCatchAll);
-              dbThreads = await getThreadsForCatchAllSplit(activeAccountId, others, PAGE_SIZE, 0);
+              dbThreads = await getThreadsForCatchAllSplit(activeAccountId, others, PAGE_SIZE, 0, inboxOnly);
             } else {
-              dbThreads = await getThreadsForSplit(activeAccountId, split, PAGE_SIZE, 0);
+              dbThreads = await getThreadsForSplit(activeAccountId, split, PAGE_SIZE, 0, inboxOnly);
             }
           } else {
             dbThreads = await getThreadsForAccount(activeAccountId, "INBOX", PAGE_SIZE, 0);
@@ -389,7 +391,7 @@ export function EmailList({ width, listRef, fullScreen }: { width?: number; list
     } finally {
       setLoading(false);
     }
-  }, [activeAccountId, activeLabel, activeCategory, inboxViewMode, splitsStore.splits, isSmartFolder, activeSmartFolder, setThreads, setLoading, mapDbThreads, clearSearch]);
+  }, [activeAccountId, activeLabel, activeCategory, inboxViewMode, splitScope, splitsStore.splits, isSmartFolder, activeSmartFolder, setThreads, setLoading, mapDbThreads, clearSearch]);
 
   const loadMore = useCallback(async () => {
     if (!activeAccountId || loadingMore || !hasMore) return;
@@ -399,13 +401,14 @@ export function EmailList({ width, listRef, fullScreen }: { width?: number; list
       const offset = threads.length;
       let dbThreads;
       if (activeLabel === "inbox" && inboxViewMode === "custom-split" && activeCategory !== "All") {
+        const inboxOnly = splitScope === "inbox";
         const split = splitsStore.splits.find((s) => s.id === activeCategory);
         if (split) {
           if (split.isCatchAll) {
             const others = splitsStore.splits.filter((s) => s.isEnabled && !s.isCatchAll);
-            dbThreads = await getThreadsForCatchAllSplit(activeAccountId, others, PAGE_SIZE, offset);
+            dbThreads = await getThreadsForCatchAllSplit(activeAccountId, others, PAGE_SIZE, offset, inboxOnly);
           } else {
-            dbThreads = await getThreadsForSplit(activeAccountId, split, PAGE_SIZE, offset);
+            dbThreads = await getThreadsForSplit(activeAccountId, split, PAGE_SIZE, offset, inboxOnly);
           }
         } else {
           dbThreads = await getThreadsForAccount(activeAccountId, "INBOX", PAGE_SIZE, offset);
@@ -432,7 +435,7 @@ export function EmailList({ width, listRef, fullScreen }: { width?: number; list
     } finally {
       setLoadingMore(false);
     }
-  }, [activeAccountId, activeLabel, activeCategory, inboxViewMode, splitsStore.splits, threads, loadingMore, hasMore, setThreads, mapDbThreads]);
+  }, [activeAccountId, activeLabel, activeCategory, inboxViewMode, splitScope, splitsStore.splits, threads, loadingMore, hasMore, setThreads, mapDbThreads]);
 
   useEffect(() => {
     loadThreads();
