@@ -71,6 +71,7 @@ import type { SidebarNavItem } from "@/stores/uiStore";
 import { Button } from "@/components/ui/Button";
 import { TextField } from "@/components/ui/TextField";
 import appIcon from "@/assets/icon.png";
+import { exportSettings, importSettings } from "@/services/settings/settingsIO";
 
 type SettingsTab = "general" | "notifications" | "composing" | "mail-rules" | "people" | "accounts" | "shortcuts" | "ai" | "writing" | "crm" | "inbox-splits" | "about";
 
@@ -163,6 +164,7 @@ export function SettingsPage() {
   const [notifyCategories, setNotifyCategories] = useState<Set<string>>(() => new Set(["Primary"]));
   const [vipSenders, setVipSenders] = useState<{ email_address: string; display_name: string | null }[]>([]);
   const [newVipEmail, setNewVipEmail] = useState("");
+  const [settingsFileStatus, setSettingsFileStatus] = useState<"idle" | "exporting" | "importing" | "exported" | "imported" | "invalid" | "error">("idle");
 
   // Load settings from DB
   useEffect(() => {
@@ -752,6 +754,78 @@ export function SettingsPage() {
                         <option value="2000">2 GB</option>
                       </select>
                     </SettingRow>
+                  </Section>
+
+                  <Section title="Settings File">
+                    <div className="space-y-3">
+                      <p className="text-xs text-text-tertiary leading-relaxed">
+                        Export your preferences to a JSON file and import it on another Mac.
+                        Account credentials and OAuth tokens are never included.
+                      </p>
+                      <div className="flex items-center gap-3">
+                        <Button
+                          variant="secondary"
+                          icon={<Download size={14} />}
+                          disabled={settingsFileStatus === "exporting" || settingsFileStatus === "importing"}
+                          onClick={async () => {
+                            setSettingsFileStatus("exporting");
+                            try {
+                              const result = await exportSettings();
+                              setSettingsFileStatus(result === "saved" ? "exported" : "idle");
+                              if (result === "saved") setTimeout(() => setSettingsFileStatus("idle"), 3000);
+                            } catch {
+                              setSettingsFileStatus("error");
+                              setTimeout(() => setSettingsFileStatus("idle"), 3000);
+                            }
+                          }}
+                        >
+                          {settingsFileStatus === "exporting" ? "Exporting…" : "Export Settings"}
+                        </Button>
+                        <Button
+                          variant="secondary"
+                          icon={<Download size={14} className="rotate-180" />}
+                          disabled={settingsFileStatus === "exporting" || settingsFileStatus === "importing"}
+                          onClick={async () => {
+                            setSettingsFileStatus("importing");
+                            try {
+                              const result = await importSettings();
+                              if (result === "imported") {
+                                setSettingsFileStatus("imported");
+                                setTimeout(() => setSettingsFileStatus("idle"), 3000);
+                              } else if (result === "invalid") {
+                                setSettingsFileStatus("invalid");
+                                setTimeout(() => setSettingsFileStatus("idle"), 3000);
+                              } else {
+                                setSettingsFileStatus("idle");
+                              }
+                            } catch {
+                              setSettingsFileStatus("error");
+                              setTimeout(() => setSettingsFileStatus("idle"), 3000);
+                            }
+                          }}
+                        >
+                          {settingsFileStatus === "importing" ? "Importing…" : "Import Settings"}
+                        </Button>
+                      </div>
+                      {settingsFileStatus === "exported" && (
+                        <p className="text-xs text-success flex items-center gap-1.5">
+                          <Check size={12} /> Settings exported successfully.
+                        </p>
+                      )}
+                      {settingsFileStatus === "imported" && (
+                        <p className="text-xs text-success flex items-center gap-1.5">
+                          <Check size={12} /> Settings imported and applied.
+                        </p>
+                      )}
+                      {settingsFileStatus === "invalid" && (
+                        <p className="text-xs text-danger">
+                          Invalid settings file — make sure it was exported from this app.
+                        </p>
+                      )}
+                      {settingsFileStatus === "error" && (
+                        <p className="text-xs text-danger">Something went wrong. Try again.</p>
+                      )}
+                    </div>
                   </Section>
                 </>
               )}
