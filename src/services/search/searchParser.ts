@@ -16,9 +16,11 @@ export interface ParsedSearchQuery {
   before?: number; // unix timestamp (seconds)
   after?: number;  // unix timestamp (seconds)
   label?: string;
+  tag?: string;     // CRM contact tag (e.g. tag:"active client")
+  company?: string; // CRM contact company (e.g. company:harbor)
 }
 
-const OPERATOR_REGEX = /(?:^|\s)(from|to|subject|has|is|before|after|label):\s*(?:"([^"]+)"|(\S+))/gi;
+const OPERATOR_REGEX = /(?:^|\s)(from|to|subject|has|is|before|after|label|tag|company):\s*(?:"([^"]+)"|(\S+))/gi;
 
 /**
  * Parse a date string like YYYY/MM/DD or YYYY-MM-DD into a unix timestamp (seconds).
@@ -95,6 +97,12 @@ export function parseSearchQuery(input: string): ParsedSearchQuery {
       }
       case "label":
         result.label = value;
+        break;
+      case "tag":
+        result.tag = value;
+        break;
+      case "company":
+        result.company = value;
         break;
     }
   }

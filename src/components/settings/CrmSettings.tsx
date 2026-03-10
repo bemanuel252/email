@@ -64,7 +64,7 @@ interface CsvConfig {
   companyColumn: string;
   titleColumn: string;
   phoneColumn: string;
-  tagsColumn: string;
+  tagsColumns: string[];
   dealStageColumn: string;
   dealValueColumn: string;
 }
@@ -144,7 +144,7 @@ function defaultConfigForProvider(provider: CrmProvider): ProviderConfig {
         companyColumn: "",
         titleColumn: "",
         phoneColumn: "",
-        tagsColumn: "",
+        tagsColumns: [],
         dealStageColumn: "",
         dealValueColumn: "",
       } satisfies CsvConfig;
@@ -384,19 +384,21 @@ async function readCsvMeta(filePath: string): Promise<{ headers: string[]; rowCo
   return { headers: parseFirstCsvLine(lines[0]!), rowCount: lines.length - 1 };
 }
 
-const CSV_HINTS: Record<keyof Omit<CsvConfig, "filePath">, string[]> = {
+const CSV_FIELD_HINTS: Record<keyof Omit<CsvConfig, "filePath" | "tagsColumns">, string[]> = {
   emailColumn:     ["email", "e-mail", "mail", "email_address", "emailaddress"],
   nameColumn:      ["name", "full_name", "fullname", "full name", "contact_name", "display_name"],
   companyColumn:   ["company", "organization", "org", "account", "business", "employer"],
   titleColumn:     ["title", "job_title", "jobtitle", "job title", "position", "role"],
   phoneColumn:     ["phone", "mobile", "cell", "telephone", "tel", "phone_number"],
-  tagsColumn:      ["tags", "tag", "labels", "label", "category", "categories", "segment", "group"],
   dealStageColumn: ["deal_stage", "dealstage", "stage", "pipeline", "opportunity"],
   dealValueColumn: ["deal_value", "dealvalue", "value", "amount", "revenue", "arr", "mrr"],
 };
 
+const CSV_TAG_HINTS = ["tags", "tag", "labels", "label", "category", "categories", "segment", "group", "type", "status"];
+
 function autoMatchCsvColumns(headers: string[], current: CsvConfig): CsvConfig {
   const lower = headers.map((h) => h.toLowerCase());
+
   function best(hints: string[], cur: string): string {
     if (cur) return cur;
     for (const hint of hints) {
@@ -409,16 +411,25 @@ function autoMatchCsvColumns(headers: string[], current: CsvConfig): CsvConfig {
     }
     return "";
   }
+
+  // Auto-detect tag columns: find first match if none already set
+  const tagsColumns = current.tagsColumns.length > 0
+    ? current.tagsColumns
+    : (() => {
+        const match = best(CSV_TAG_HINTS, "");
+        return match ? [match] : [];
+      })();
+
   return {
     ...current,
-    emailColumn:     best(CSV_HINTS.emailColumn,     current.emailColumn),
-    nameColumn:      best(CSV_HINTS.nameColumn,      current.nameColumn),
-    companyColumn:   best(CSV_HINTS.companyColumn,   current.companyColumn),
-    titleColumn:     best(CSV_HINTS.titleColumn,     current.titleColumn),
-    phoneColumn:     best(CSV_HINTS.phoneColumn,     current.phoneColumn),
-    tagsColumn:      best(CSV_HINTS.tagsColumn,      current.tagsColumn),
-    dealStageColumn: best(CSV_HINTS.dealStageColumn, current.dealStageColumn),
-    dealValueColumn: best(CSV_HINTS.dealValueColumn, current.dealValueColumn),
+    emailColumn:     best(CSV_FIELD_HINTS.emailColumn,     current.emailColumn),
+    nameColumn:      best(CSV_FIELD_HINTS.nameColumn,      current.nameColumn),
+    companyColumn:   best(CSV_FIELD_HINTS.companyColumn,   current.companyColumn),
+    titleColumn:     best(CSV_FIELD_HINTS.titleColumn,     current.titleColumn),
+    phoneColumn:     best(CSV_FIELD_HINTS.phoneColumn,     current.phoneColumn),
+    tagsColumns,
+    dealStageColumn: best(CSV_FIELD_HINTS.dealStageColumn, current.dealStageColumn),
+    dealValueColumn: best(CSV_FIELD_HINTS.dealValueColumn, current.dealValueColumn),
   };
 }
 
@@ -467,7 +478,7 @@ function CsvForm({
         const blank: CsvConfig = {
           filePath: selected,
           emailColumn: "", nameColumn: "", companyColumn: "",
-          titleColumn: "", phoneColumn: "", tagsColumn: "",
+          titleColumn: "", phoneColumn: "", tagsColumns: [],
           dealStageColumn: "", dealValueColumn: "",
         };
         onChange(autoMatchCsvColumns(hdrs, blank));
@@ -611,11 +622,6 @@ function CsvForm({
               onChangeVal={(v) => onChange({ ...config, phoneColumn: v })}
             />
             <ColSelect
-              label="Tags"
-              value={config.tagsColumn}
-              onChangeVal={(v) => onChange({ ...config, tagsColumn: v })}
-            />
-            <ColSelect
               label="Deal Stage"
               value={config.dealStageColumn}
               onChangeVal={(v) => onChange({ ...config, dealStageColumn: v })}
@@ -626,12 +632,68 @@ function CsvForm({
               onChangeVal={(v) => onChange({ ...config, dealValueColumn: v })}
             />
           </div>
-          {headers.length > 0 && (
-            <p className="text-xs text-text-quaternary">
-              Tags column values should be pipe-separated — e.g. <span className="font-mono bg-bg-tertiary px-1 rounded">active client|vip</span>.
-              Use the <span className="font-medium text-text-tertiary">Contact tag</span> filter in Inbox Splits to route emails by tag.
-            </p>
-          )}
+
+          {/* Tag Sources — full width, supports multiple columns */}
+          <div>
+            <div className="flex items-center justify-between mb-1.5">
+              <label className="text-xs text-text-tertiary">
+                Tag Sources <span className="text-text-quaternary">(optional)</span>
+              </label>
+              <span className="text-xs text-text-quaternary">Each column adds its value as a contact tag</span>
+            </div>
+            <div className="space-y-2">
+              {config.tagsColumns.map((col, i) => (
+                <div key={i} className="flex items-center gap-2">
+                  {headers.length > 0 ? (
+                    <select
+                      value={col}
+                      onChange={(e) => {
+                        const updated = [...config.tagsColumns];
+                        updated[i] = e.target.value;
+                        onChange({ ...config, tagsColumns: updated });
+                      }}
+                      className="flex-1 px-3 py-2 text-sm bg-bg-tertiary border border-border-primary rounded text-text-primary outline-none focus:border-accent"
+                    >
+                      <option value="">— not mapped —</option>
+                      {headers.map((h) => <option key={h} value={h}>{h}</option>)}
+                    </select>
+                  ) : (
+                    <input
+                      type="text"
+                      value={col}
+                      onChange={(e) => {
+                        const updated = [...config.tagsColumns];
+                        updated[i] = e.target.value;
+                        onChange({ ...config, tagsColumns: updated });
+                      }}
+                      placeholder="Column name"
+                      className="flex-1 px-3 py-2 text-sm bg-bg-tertiary border border-border-primary rounded text-text-primary outline-none focus:border-accent"
+                    />
+                  )}
+                  <button
+                    onClick={() => onChange({ ...config, tagsColumns: config.tagsColumns.filter((_, j) => j !== i) })}
+                    className="p-1.5 text-text-tertiary hover:text-danger transition-colors shrink-0 rounded"
+                    title="Remove tag source"
+                  >
+                    <X size={13} />
+                  </button>
+                </div>
+              ))}
+              <button
+                onClick={() => onChange({ ...config, tagsColumns: [...config.tagsColumns, ""] })}
+                className="flex items-center gap-1.5 text-xs text-accent hover:text-accent-hover transition-colors"
+              >
+                <Plus size={12} />
+                Add tag source
+              </button>
+            </div>
+            {config.tagsColumns.length > 0 && (
+              <p className="text-xs text-text-quaternary mt-1.5">
+                Values can be pipe-separated within a column — e.g. <span className="font-mono bg-bg-tertiary px-1 rounded">active client|vip</span>.
+                Use the <span className="font-medium text-text-tertiary">Contact tag</span> filter in Inbox Splits to route emails by tag.
+              </p>
+            )}
+          </div>
         </div>
       )}
     </div>

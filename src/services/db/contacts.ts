@@ -240,3 +240,24 @@ export async function getLatestAuthResult(
   );
   return rows[0]?.auth_results ?? null;
 }
+
+/**
+ * Return all distinct tag values across crm_contacts, sorted alphabetically.
+ * Used to populate autocomplete suggestions in inbox split rules.
+ */
+export async function getDistinctCrmTags(): Promise<string[]> {
+  const db = await getDb();
+  const rows = await db.select<{ tags_json: string }[]>(
+    `SELECT tags_json FROM crm_contacts WHERE tags_json != '[]' AND tags_json != ''`,
+  );
+  const tagSet = new Set<string>();
+  for (const row of rows) {
+    try {
+      const tags = JSON.parse(row.tags_json) as string[];
+      for (const t of tags) {
+        if (t) tagSet.add(t);
+      }
+    } catch { /* skip malformed */ }
+  }
+  return [...tagSet].sort((a, b) => a.localeCompare(b));
+}

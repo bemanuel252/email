@@ -23,6 +23,7 @@ import { useAccountStore } from "@/stores/accountStore";
 import { useUIStore } from "@/stores/uiStore";
 import type { InboxSplit, InboxSplitRule } from "@/services/db/inboxSplits";
 import { getLabelsForAccount, type DbLabel } from "@/services/db/labels";
+import { getDistinctCrmTags } from "@/services/db/contacts";
 import {
   RULE_TYPE_LABELS,
   RULE_TYPE_HAS_VALUE,
@@ -164,12 +165,14 @@ function SplitEditor({
   initial,
   topDomains,
   labels,
+  contactTags,
   onSave,
   onCancel,
 }: {
   initial: SplitFormState;
   topDomains: string[];
   labels: DbLabel[];
+  contactTags: string[];
   onSave: (form: SplitFormState) => void;
   onCancel: () => void;
 }) {
@@ -307,6 +310,22 @@ function SplitEditor({
                         </option>
                       ))}
                     </select>
+                  ) : rule.ruleType === "contact_tag" ? (
+                    <>
+                      <input
+                        type="text"
+                        list={`ctags-${rule.id}`}
+                        value={rule.ruleValue}
+                        onChange={(e) => updateRule(rule.id, { ruleValue: e.target.value })}
+                        placeholder={contactTags.length > 0 ? "Type or choose a tag…" : "e.g. active client"}
+                        className="flex-1 bg-bg-tertiary border border-border-primary rounded px-2 py-1.5 text-xs text-text-primary placeholder:text-text-tertiary focus:outline-none focus:ring-1 focus:ring-accent"
+                      />
+                      {contactTags.length > 0 && (
+                        <datalist id={`ctags-${rule.id}`}>
+                          {contactTags.map((t) => <option key={t} value={t} />)}
+                        </datalist>
+                      )}
+                    </>
                   ) : (
                     <input
                       type="text"
@@ -439,6 +458,7 @@ function SortableSplitRow({
   isExpanded,
   topDomains,
   labels,
+  contactTags,
   onExpand,
   onDelete,
   onToggleEnabled,
@@ -449,6 +469,7 @@ function SortableSplitRow({
   isExpanded: boolean;
   topDomains: string[];
   labels: DbLabel[];
+  contactTags: string[];
   onExpand: () => void;
   onDelete: () => void;
   onToggleEnabled: () => void;
@@ -482,6 +503,7 @@ function SortableSplitRow({
           initial={splitToForm(split)}
           topDomains={topDomains}
           labels={labels}
+          contactTags={contactTags}
           onSave={onSave}
           onCancel={onCancel}
         />
@@ -561,6 +583,7 @@ export function InboxSplitsEditor() {
   const [showWizard, setShowWizard] = useState(false);
   const [topDomains, setTopDomains] = useState<string[]>([]);
   const [labels, setLabels] = useState<DbLabel[]>([]);
+  const [contactTags, setContactTags] = useState<string[]>([]);
 
   const sensors = useSensors(useSensor(PointerSensor));
 
@@ -582,10 +605,20 @@ export function InboxSplitsEditor() {
     } catch { /* ignore */ }
   }, [activeAccountId, labels.length]);
 
+  // Load CRM contact tags for "contact_tag" rule autocomplete
+  const loadContactTags = useCallback(async () => {
+    if (contactTags.length > 0) return;
+    try {
+      const tags = await getDistinctCrmTags();
+      setContactTags(tags);
+    } catch { /* ignore */ }
+  }, [contactTags.length]);
+
   const loadContext = useCallback(() => {
     loadTopDomains();
     loadLabels();
-  }, [loadTopDomains, loadLabels]);
+    loadContactTags();
+  }, [loadTopDomains, loadLabels, loadContactTags]);
 
   const handleSave = useCallback(
     async (form: SplitFormState) => {
@@ -712,6 +745,7 @@ export function InboxSplitsEditor() {
                   isExpanded={expandedId === split.id}
                   topDomains={topDomains}
                   labels={labels}
+                  contactTags={contactTags}
                   onExpand={() => { setExpandedId(split.id); loadContext(); }}
                   onDelete={() => handleDelete(split.id)}
                   onToggleEnabled={() => handleToggleEnabled(split)}
@@ -740,6 +774,7 @@ export function InboxSplitsEditor() {
             }}
             topDomains={topDomains}
             labels={labels}
+            contactTags={contactTags}
             onSave={handleSave}
             onCancel={() => setAddingNew(false)}
           />

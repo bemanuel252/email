@@ -49,7 +49,7 @@ async function likeSearch(
   const params: unknown[] = [];
   let idx = 1;
 
-  // Each term must appear in at least one relevant field.
+  // Each term must appear in at least one relevant field (including CRM contact data).
   // Escape LIKE metacharacters (_ and %) so user input is literal; use ESCAPE '\'.
   const termClauses = terms.map((t) => {
     const likeVal = `%${escapeLike(t)}%`;
@@ -58,11 +58,15 @@ async function likeSearch(
     const c = idx++; params.push(likeVal);
     const d = idx++; params.push(likeVal);
     const e = idx++; params.push(likeVal);
+    const f = idx++; params.push(likeVal);
+    const g = idx++; params.push(likeVal);
     return `(LOWER(m.from_address) LIKE LOWER($${a}) ESCAPE '\\'
         OR LOWER(m.from_name) LIKE LOWER($${b}) ESCAPE '\\'
         OR LOWER(m.to_addresses) LIKE LOWER($${c}) ESCAPE '\\'
         OR LOWER(m.subject) LIKE LOWER($${d}) ESCAPE '\\'
-        OR LOWER(m.snippet) LIKE LOWER($${e}) ESCAPE '\\')`;
+        OR LOWER(m.snippet) LIKE LOWER($${e}) ESCAPE '\\'
+        OR LOWER(cc.company) LIKE LOWER($${f}) ESCAPE '\\'
+        OR LOWER(cc.display_name) LIKE LOWER($${g}) ESCAPE '\\')`;
   });
 
   const whereParts = [...termClauses];
@@ -93,6 +97,7 @@ async function likeSearch(
     m.date,
     0 as rank
   FROM messages m
+  LEFT JOIN crm_contacts cc ON LOWER(cc.email) = LOWER(m.from_address)
   WHERE ${whereParts.join(" AND ")}
   ORDER BY m.date DESC
   LIMIT $${limitIdx}`;
@@ -139,7 +144,9 @@ export async function searchMessages(
       parsed.isStarred ||
       parsed.before !== undefined ||
       parsed.after !== undefined ||
-      parsed.label
+      parsed.label ||
+      parsed.tag ||
+      parsed.company
     ) {
       try {
         const { sql, params } = buildSearchQuery(parsed, accountId, limit);

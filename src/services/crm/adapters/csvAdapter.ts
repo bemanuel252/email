@@ -8,7 +8,8 @@ interface CsvConfig {
   companyColumn?: string;
   titleColumn?: string;
   phoneColumn?: string;
-  tagsColumn?: string;
+  tagsColumns?: string[];   // Multiple tag source columns (new)
+  tagsColumn?: string;      // Legacy single tag column (kept for backward compat)
   dealStageColumn?: string;
   dealValueColumn?: string;
 }
@@ -110,13 +111,21 @@ function rowToContact(
   const dealValueRaw = cfg.dealValueColumn ? row[cfg.dealValueColumn]?.trim() : null;
   const dealValue = dealValueRaw ? parseFloat(dealValueRaw) || null : null;
 
-  const tagsRaw = cfg.tagsColumn ? row[cfg.tagsColumn]?.trim() : "";
-  const tags = tagsRaw
-    ? tagsRaw
-        .split("|")
-        .map((t) => t.trim())
-        .filter(Boolean)
-    : [];
+  // Collect tags from all mapped tag columns (new) or legacy single column
+  const tagCols: string[] = cfg.tagsColumns?.length
+    ? cfg.tagsColumns
+    : cfg.tagsColumn
+      ? [cfg.tagsColumn]
+      : [];
+  const tags: string[] = [];
+  for (const col of tagCols) {
+    const raw = row[col]?.trim();
+    if (raw) {
+      raw.split("|").map((t) => t.trim()).filter(Boolean).forEach((t) => tags.push(t));
+    }
+  }
+  // Deduplicate
+  const uniqueTags = [...new Set(tags)];
 
   return {
     email,
@@ -126,7 +135,7 @@ function rowToContact(
     phone,
     dealStage,
     dealValue,
-    tags,
+    tags: uniqueTags,
     crmRecordId: null,
     crmRecordUrl: null,
     rawData: row as Record<string, unknown>,

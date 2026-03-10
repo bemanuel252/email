@@ -114,6 +114,24 @@ export function buildSearchQuery(
     paramIdx++;
   }
 
+  // tag: operator — match threads where sender has this CRM contact tag
+  if (parsed.tag) {
+    params.push(`%"${escapeLike(parsed.tag)}"%`);
+    whereClauses.push(
+      `EXISTS (SELECT 1 FROM crm_contacts cc WHERE LOWER(cc.email) = LOWER(m.from_address) AND cc.tags_json LIKE $${paramIdx} ESCAPE '\\')`,
+    );
+    paramIdx++;
+  }
+
+  // company: operator — match threads where sender's CRM contact has this company
+  if (parsed.company) {
+    params.push(escapeLike(parsed.company));
+    whereClauses.push(
+      `EXISTS (SELECT 1 FROM crm_contacts cc WHERE LOWER(cc.email) = LOWER(m.from_address) AND LOWER(cc.company) LIKE LOWER('%' || $${paramIdx} || '%') ESCAPE '\\')`,
+    );
+    paramIdx++;
+  }
+
   const whereStr = whereClauses.length > 0 ? `WHERE ${whereClauses.join(" AND ")}` : "";
   const orderBy = needsFts ? "ORDER BY rank" : "ORDER BY m.date DESC";
 
