@@ -128,36 +128,49 @@ export function EmailRenderer({
     if (!doc) return;
 
     doc.open();
-    // Plain text: blend with app theme (dark text on light bg, light text on dark bg)
-    // HTML emails: always render on a light background since senders design for white/light
-    const plainTextDark = isDark && isPlainText;
-    const htmlDark = isDark && !isPlainText;
+    const BG = isDark ? "#1a1a1f" : "#ffffff";
+    const TEXT = isDark ? "#e2e8f0" : "#1f2937";
+    const LINK = isDark ? "#6C8EEF" : "#3b82f6";
+    const QUOTE_BORDER = isDark ? "#3a3a4a" : "#d1d5db";
+    const QUOTE_TEXT = isDark ? "#9ca3af" : "#6b7280";
     doc.write(`<!DOCTYPE html>
 <html>
 <head>
+  <meta name="color-scheme" content="${isDark ? "dark" : "light"}">
   <style>
-    body {
+    html, body {
       margin: 0;
       padding: 16px;
       font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
       font-size: 14px;
       line-height: 1.6;
-      color: ${plainTextDark ? "#e5e7eb" : "#1f2937"};
-      background: ${htmlDark ? "#ffffff" : "transparent"};
+      color: ${TEXT};
+      background-color: ${BG} !important;
       word-wrap: break-word;
       overflow-wrap: break-word;
       overflow: hidden;
     }
     img { max-width: 100%; height: auto; }
-    a { color: ${plainTextDark ? "#60a5fa" : "#3b82f6"}; }
+    a { color: ${LINK}; }
     blockquote {
-      border-left: 3px solid ${plainTextDark ? "#4b5563" : "#d1d5db"};
+      border-left: 3px solid ${QUOTE_BORDER};
       margin: 8px 0;
       padding: 4px 12px;
-      color: ${plainTextDark ? "#9ca3af" : "#6b7280"};
+      color: ${QUOTE_TEXT};
     }
     pre { overflow-x: auto; }
     table { max-width: 100%; }
+    ${isDark ? `
+    /* Strip forced white/light backgrounds from sender HTML */
+    table, tr, td, th, tbody, thead, tfoot,
+    div, section, article, header, footer, center, span {
+      background-color: transparent !important;
+    }
+    /* Re-allow non-white background colors (sender branding etc) */
+    [bgcolor]:not([bgcolor="#fff"]):not([bgcolor="#ffffff"]):not([bgcolor="white"]):not([bgcolor="#FFFFFF"]) {
+      background-color: attr(bgcolor) !important;
+    }
+    ` : ""}
   </style>
 </head>
 <body>${bodyHtml}</body>
@@ -240,8 +253,8 @@ export function EmailRenderer({
       <iframe
         ref={iframeRef}
         sandbox="allow-same-origin"
-        className={`w-full border-0 ${isDark && !isPlainText ? "rounded-md" : ""}`}
-        style={{ overflow: "hidden" }}
+        className="w-full border-0"
+        style={{ overflow: "hidden", backgroundColor: isDark ? "#1a1a1f" : undefined }}
         title="Email content"
       />
     </div>
