@@ -7,6 +7,7 @@ import { UndoSendToast } from "./components/composer/UndoSendToast";
 import { CommandPalette } from "./components/search/CommandPalette";
 import { ShortcutsHelp } from "./components/search/ShortcutsHelp";
 import { AskInbox } from "./components/search/AskInbox";
+import { useChatStore } from "./stores/chatStore";
 import { useUIStore } from "./stores/uiStore";
 import { useAccountStore } from "./stores/accountStore";
 import { useKeyboardShortcuts } from "./hooks/useKeyboardShortcuts";
@@ -61,6 +62,7 @@ import { fetchSendAsAliases } from "./services/gmail/sendAs";
 import { getGmailClient } from "./services/gmail/tokenManager";
 import { invoke } from "@tauri-apps/api/core";
 import { DndProvider } from "./components/dnd/DndProvider";
+import { ChatPanel } from "./components/chat/ChatPanel";
 import { TitleBar } from "./components/layout/TitleBar";
 import { useShortcutStore } from "./stores/shortcutStore";
 import { getIncompleteTaskCount } from "./services/db/tasks";
@@ -69,6 +71,7 @@ import { ContextMenuPortal } from "./components/ui/ContextMenuPortal";
 import { MoveToFolderDialog } from "./components/email/MoveToFolderDialog";
 import { OfflineBanner } from "./components/ui/OfflineBanner";
 import { UpdateToast } from "./components/ui/UpdateToast";
+import { WritingStyleSetupBanner } from "./components/ui/WritingStyleSetupBanner";
 import { ErrorBoundary } from "./components/ui/ErrorBoundary";
 import { formatSyncError } from "./utils/networkErrors";
 import { getThemeById, COLOR_THEMES } from "./constants/themes";
@@ -98,8 +101,12 @@ export default function App() {
   const theme = useUIStore((s) => s.theme);
   const fontScale = useUIStore((s) => s.fontScale);
   const colorTheme = useUIStore((s) => s.colorTheme);
+  const visualTheme = useUIStore((s) => s.visualTheme);
   const reduceMotion = useUIStore((s) => s.reduceMotion);
   const sidebarCollapsed = useUIStore((s) => s.sidebarCollapsed);
+  const chatIsOpen = useChatStore((s) => s.isOpen);
+  const chatPosition = useChatStore((s) => s.panelPosition);
+  const chatIsFloating = useChatStore((s) => s.isFloating);
   const [showAddAccount, setShowAddAccount] = useState(false);
   const [initialized, setInitialized] = useState(false);
   const [syncStatus, setSyncStatus] = useState<string | null>(null);
@@ -107,6 +114,7 @@ export default function App() {
   const [showShortcutsHelp, setShowShortcutsHelp] = useState(false);
   const [showAskInbox, setShowAskInbox] = useState(false);
   const [moveToFolderState, setMoveToFolderState] = useState<{ open: boolean; threadIds: string[] }>({ open: false, threadIds: [] });
+  const [writingSetupAccount, setWritingSetupAccount] = useState<{ id: string; email: string } | null>(null);
   const deepLinkCleanupRef = useRef<(() => void) | undefined>(undefined);
 
   // Sync bridge: router state → Zustand stores (temporary)
@@ -153,6 +161,12 @@ export default function App() {
     const togglePalette = () => setShowCommandPalette((p) => !p);
     const toggleHelp = () => setShowShortcutsHelp((p) => !p);
     const toggleAskInbox = () => setShowAskInbox((p) => !p);
+    const toggleChat = () => {
+      const activeAccountId = useAccountStore.getState().activeAccountId;
+      if (activeAccountId) {
+        useChatStore.getState().toggleChat(activeAccountId);
+      }
+    };
     const handleMoveToFolder = (e: Event) => {
       const detail = (e as CustomEvent<{ threadIds: string[] }>).detail;
       setMoveToFolderState({ open: true, threadIds: detail.threadIds });
@@ -160,11 +174,13 @@ export default function App() {
     window.addEventListener("velo-toggle-command-palette", togglePalette);
     window.addEventListener("velo-toggle-shortcuts-help", toggleHelp);
     window.addEventListener("velo-toggle-ask-inbox", toggleAskInbox);
+    window.addEventListener("velo-toggle-chat", toggleChat);
     window.addEventListener("velo-move-to-folder", handleMoveToFolder);
     return () => {
       window.removeEventListener("velo-toggle-command-palette", togglePalette);
       window.removeEventListener("velo-toggle-shortcuts-help", toggleHelp);
       window.removeEventListener("velo-toggle-ask-inbox", toggleAskInbox);
+      window.removeEventListener("velo-toggle-chat", toggleChat);
       window.removeEventListener("velo-move-to-folder", handleMoveToFolder);
     };
   }, []);
@@ -263,6 +279,12 @@ export default function App() {
         const savedColorTheme = await getSetting("color_theme");
         if (savedColorTheme && COLOR_THEMES.some((t) => t.id === savedColorTheme)) {
           ui.setColorTheme(savedColorTheme as ColorThemeId);
+        }
+
+        // Restore visual theme
+        const savedVisualTheme = await getSetting("visual_theme");
+        if (savedVisualTheme === "default" || savedVisualTheme === "superhuman" || savedVisualTheme === "gmail" || savedVisualTheme === "outlook") {
+          ui.setVisualTheme(savedVisualTheme);
         }
 
         // Restore inbox view mode
@@ -461,6 +483,9 @@ export default function App() {
     const root = document.documentElement;
     const props = ["--color-accent", "--color-accent-hover", "--color-accent-light", "--color-bg-selected", "--color-sidebar-active"];
 
+    // Visual themes override all CSS vars — skip color theme when one is active
+    if (visualTheme !== "default") return;
+
     const apply = () => {
       if (colorTheme === "indigo") {
         // Default theme — remove inline overrides, let CSS handle it
@@ -486,7 +511,35 @@ export default function App() {
       mq.addEventListener("change", apply);
       return () => mq.removeEventListener("change", apply);
     }
-  }, [colorTheme, theme]);
+  }, [colorTheme, theme, visualTheme]);
+
+  // Apply visual theme class to <html>
+  useEffect(() => {
+    const root = document.documentElement;
+    const VISUAL_CLASSES = ["theme-superhuman", "theme-gmail", "theme-outlook"];
+    const ACCENT_PROPS = ["--color-accent", "--color-accent-hover", "--color-accent-light", "--color-bg-selected", "--color-sidebar-active"];
+
+    // Remove all visual theme classes
+    root.classList.remove(...VISUAL_CLASSES);
+
+    if (visualTheme === "default") {
+      // Restore normal light/dark mode behavior
+      // (the theme effect above re-runs and handles it)
+      return;
+    }
+
+    root.classList.add(`theme-${visualTheme}`);
+
+    // Clear any inline accent overrides — theme CSS handles everything
+    for (const p of ACCENT_PROPS) root.style.removeProperty(p);
+
+    // Superhuman always forces dark mode.
+    // Gmail/Outlook respect the user's theme setting — the theme effect above handles dark/light.
+    if (visualTheme === "superhuman") {
+      root.classList.add("dark");
+    }
+    // For gmail/outlook: do NOT remove .dark — let the theme effect manage it.
+  }, [visualTheme]);
 
   const handleAddAccountSuccess = useCallback(async () => {
     setShowAddAccount(false);
@@ -522,6 +575,11 @@ export default function App() {
     // since we already triggered the new account's sync above.
     const activeIds = mapped.filter((a) => a.isActive).map((a) => a.id);
     startBackgroundSync(activeIds, true);
+
+    // Prompt to set up writing style for the newest account
+    if (newest) {
+      setWritingSetupAccount({ id: newest.id, email: newest.email });
+    }
   }, []);
 
   if (!initialized) {
@@ -552,6 +610,11 @@ export default function App() {
       <TitleBar />
       <div className="flex flex-1 min-w-0 overflow-hidden">
         <DndProvider>
+          {chatIsOpen && !chatIsFloating && chatPosition === "left" && (
+            <ErrorBoundary name="ChatPanel">
+              <ChatPanel />
+            </ErrorBoundary>
+          )}
           <ErrorBoundary name="Sidebar">
             <Sidebar
               collapsed={sidebarCollapsed}
@@ -581,6 +644,13 @@ export default function App() {
       </ErrorBoundary>
       <UndoSendToast />
       <UpdateToast />
+      {writingSetupAccount && (
+        <WritingStyleSetupBanner
+          accountId={writingSetupAccount.id}
+          accountEmail={writingSetupAccount.email}
+          onDismiss={() => setWritingSetupAccount(null)}
+        />
+      )}
       <ErrorBoundary name="CommandPalette">
         <CommandPalette
           isOpen={showCommandPalette}

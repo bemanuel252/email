@@ -1,6 +1,6 @@
 import { useState, useRef, useCallback } from "react";
 import { useAccountStore, type Account } from "@/stores/accountStore";
-import { ChevronDown, Check, Plus, UserPlus, Calendar, Layers } from "lucide-react";
+import { Plus, Layers, UserPlus, Calendar, Check } from "lucide-react";
 import { useClickOutside } from "@/hooks/useClickOutside";
 
 interface AccountSwitcherProps {
@@ -8,290 +8,232 @@ interface AccountSwitcherProps {
   onAddAccount: () => void;
 }
 
-export function AccountSwitcher({
-  collapsed,
-  onAddAccount,
-}: AccountSwitcherProps) {
-  const { accounts, activeAccountId, setActiveAccount, setAllAccounts } = useAccountStore();
-  const [open, setOpen] = useState(false);
-  const dropdownRef = useRef<HTMLDivElement | null>(null);
+const MAX_INLINE = 4; // max account pills shown inline before overflow
 
-  useClickOutside(dropdownRef, () => setOpen(false));
-
-  const activeAccount = accounts.find((a) => a.id === activeAccountId);
-  const isAllAccounts = activeAccountId === null && accounts.length > 1;
-
-  const handleSwitch = useCallback(
-    (id: string) => {
-      setActiveAccount(id);
-      setOpen(false);
-    },
-    [setActiveAccount],
-  );
-
-  const handleAllAccounts = useCallback(() => {
-    setAllAccounts();
-    setOpen(false);
-  }, [setAllAccounts]);
-
-  const handleAdd = useCallback(() => {
-    onAddAccount();
-    setOpen(false);
-  }, [onAddAccount]);
-
-  // No accounts — prompt to add
-  if (accounts.length === 0) {
-    return (
-      <div className="p-3">
-        <button
-          onClick={onAddAccount}
-          className={`flex items-center w-full rounded-lg p-2 text-sm text-sidebar-text/70 hover:bg-sidebar-hover hover:text-sidebar-text transition-colors ${
-            collapsed ? "justify-center" : "gap-3"
-          }`}
-        >
-          <div className="w-8 h-8 rounded-full bg-accent/10 flex items-center justify-center shrink-0">
-            <UserPlus size={16} className="text-accent" />
-          </div>
-          {!collapsed && <span className="font-medium">Add Account</span>}
-        </button>
-      </div>
-    );
-  }
-
-  return (
-    <div className="relative p-2" ref={dropdownRef}>
-      {/* Trigger button */}
-      <button
-        onClick={() => setOpen((v) => !v)}
-        className={`flex items-center w-full rounded-lg p-1.5 hover:bg-sidebar-hover transition-colors ${
-          collapsed ? "justify-center" : "gap-2.5"
-        } ${open ? "bg-sidebar-hover" : ""}`}
-      >
-        {isAllAccounts ? (
-          <AllAccountsAvatar accounts={accounts} />
-        ) : (
-          <ActiveAvatar account={activeAccount} />
-        )}
-        {!collapsed && (
-          <>
-            <div className="flex-1 min-w-0 text-left">
-              {isAllAccounts ? (
-                <>
-                  <div className="text-sm font-medium text-sidebar-text truncate leading-tight">
-                    All Accounts
-                  </div>
-                  <div className="text-xs text-sidebar-text/50 truncate leading-tight">
-                    {accounts.length} accounts
-                  </div>
-                </>
-              ) : activeAccount ? (
-                <>
-                  <div className="text-sm font-medium text-sidebar-text truncate leading-tight">
-                    {activeAccount.displayName || activeAccount.email.split("@")[0]}
-                  </div>
-                  <div className="text-xs text-sidebar-text/50 truncate leading-tight">
-                    {activeAccount.email}
-                  </div>
-                </>
-              ) : null}
-            </div>
-            {(isAllAccounts || activeAccount) && (
-              <ChevronDown
-                size={14}
-                className={`shrink-0 text-sidebar-text/40 transition-transform duration-200 ${
-                  open ? "rotate-180" : ""
-                }`}
-              />
-            )}
-          </>
-        )}
-      </button>
-
-      {/* Dropdown */}
-      {open && (
-        <div
-          className={`absolute z-50 mt-1 py-1 rounded-lg border border-border-primary bg-bg-primary shadow-lg glass-panel ${
-            collapsed ? "left-full ml-1 top-0 w-64" : "left-2 right-2"
-          }`}
-        >
-          {accounts.length > 1 && (
-            <>
-              <button
-                onClick={handleAllAccounts}
-                className={`flex items-center gap-2.5 w-full px-3 py-2 text-left transition-colors ${
-                  isAllAccounts
-                    ? "bg-accent/8 text-accent"
-                    : "text-text-primary hover:bg-bg-hover"
-                }`}
-              >
-                <div
-                  className={`w-7 h-7 rounded-full flex items-center justify-center shrink-0 ${
-                    isAllAccounts ? "bg-accent text-white" : "bg-accent/12 text-accent"
-                  }`}
-                >
-                  <Layers size={14} />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="text-sm font-medium truncate leading-tight">
-                    All Accounts
-                  </div>
-                  <div className="text-xs text-text-secondary truncate leading-tight">
-                    Combined inbox
-                  </div>
-                </div>
-                {isAllAccounts && (
-                  <Check size={14} className="shrink-0 text-accent" />
-                )}
-              </button>
-              <div className="border-t border-border-primary my-1" />
-              <div className="px-3 py-1.5 text-[0.625rem] font-medium text-text-tertiary uppercase tracking-wider">
-                Accounts
-              </div>
-            </>
-          )}
-          {accounts.map((account) => {
-            const isActive = account.id === activeAccountId;
-            return (
-              <button
-                key={account.id}
-                onClick={() => handleSwitch(account.id)}
-                className={`flex items-center gap-2.5 w-full px-3 py-2 text-left transition-colors ${
-                  isActive
-                    ? "bg-accent/8 text-accent"
-                    : "text-text-primary hover:bg-bg-hover"
-                }`}
-              >
-                <AccountAvatarSmall account={account} isActive={isActive} />
-                <div className="flex-1 min-w-0">
-                  <div className="text-sm font-medium truncate leading-tight flex items-center gap-1.5">
-                    {account.displayName || account.email.split("@")[0]}
-                    {account.provider === "caldav" && (
-                      <Calendar size={12} className="shrink-0 text-text-tertiary" />
-                    )}
-                  </div>
-                  <div className="text-xs text-text-secondary truncate leading-tight">
-                    {account.email}
-                  </div>
-                </div>
-                {isActive && (
-                  <Check size={14} className="shrink-0 text-accent" />
-                )}
-              </button>
-            );
-          })}
-          <div className="border-t border-border-primary my-1" />
-          <button
-            onClick={handleAdd}
-            className="flex items-center gap-2.5 w-full px-3 py-2 text-sm text-text-secondary hover:bg-bg-hover hover:text-text-primary transition-colors"
-          >
-            <div className="w-7 h-7 rounded-full bg-bg-tertiary flex items-center justify-center shrink-0">
-              <Plus size={14} />
-            </div>
-            <span>Add account</span>
-          </button>
-        </div>
-      )}
-    </div>
-  );
-}
-
-/** Avatar shown in the trigger when "All Accounts" is active — overlapping initials grid */
-function AllAccountsAvatar({ accounts }: { accounts: Account[] }) {
-  const first = accounts.slice(0, 4);
-  const initials = first.map((a) =>
-    (a.displayName?.[0] ?? a.email[0] ?? "?").toUpperCase(),
-  );
-
-  return (
-    <div className="w-8 h-8 rounded-full bg-accent/15 flex items-center justify-center shrink-0 overflow-hidden relative">
-      {initials.length <= 2 ? (
-        // Two initials side by side
-        <div className="flex items-center justify-center w-full h-full gap-0">
-          {initials.map((ch, i) => (
-            <span key={i} className="text-[9px] font-bold text-accent leading-none">
-              {ch}
-            </span>
-          ))}
-        </div>
-      ) : (
-        // 2×2 grid of initials
-        <div className="grid grid-cols-2 w-full h-full">
-          {initials.slice(0, 4).map((ch, i) => (
-            <div
-              key={i}
-              className="flex items-center justify-center text-[7px] font-bold text-accent bg-accent/10"
-            >
-              {ch}
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
-/** The main avatar shown in the trigger — slightly larger */
-function ActiveAvatar({ account }: { account: Account | undefined }) {
+/** Single account pill button */
+function AccountPill({
+  account,
+  isActive,
+  onClick,
+}: {
+  account: Account;
+  isActive: boolean;
+  onClick: () => void;
+}) {
   const [imgError, setImgError] = useState(false);
-
-  if (!account) return null;
-
-  const initial = (
-    account.displayName?.[0] ?? account.email[0] ?? "?"
-  ).toUpperCase();
+  const initial = (account.displayName?.[0] ?? account.email[0] ?? "?").toUpperCase();
   const showImg = account.avatarUrl && !imgError;
+  const label = account.displayName || account.email.split("@")[0];
 
   return (
-    <div className="w-8 h-8 rounded-full bg-accent/15 text-accent flex items-center justify-center shrink-0 text-sm font-semibold overflow-hidden">
+    <button
+      onClick={onClick}
+      title={`${label} — ${account.email}`}
+      className={`relative w-7 h-7 rounded-full overflow-hidden flex items-center justify-center text-[0.7rem] font-semibold shrink-0 transition-all duration-150 ${
+        isActive
+          ? "ring-2 ring-accent ring-offset-1 ring-offset-sidebar"
+          : "opacity-60 hover:opacity-100"
+      }`}
+      style={{ background: isActive ? undefined : undefined }}
+    >
       {showImg ? (
         <img
-          key={account.avatarUrl}
           src={account.avatarUrl!}
           alt={account.email}
           className="w-full h-full object-cover"
           onError={() => setImgError(true)}
         />
       ) : (
-        initial
+        <div className={`w-full h-full flex items-center justify-center ${isActive ? "bg-accent text-white" : "bg-accent/25 text-accent"}`}>
+          {initial}
+        </div>
+      )}
+      {account.provider === "caldav" && (
+        <div className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-sidebar rounded-full flex items-center justify-center">
+          <Calendar size={7} className="text-text-tertiary" />
+        </div>
+      )}
+    </button>
+  );
+}
+
+export function AccountSwitcher({ collapsed, onAddAccount }: AccountSwitcherProps) {
+  const { accounts, activeAccountId, setActiveAccount, setAllAccounts } = useAccountStore();
+  const [overflowOpen, setOverflowOpen] = useState(false);
+  const overflowRef = useRef<HTMLDivElement | null>(null);
+
+  useClickOutside(overflowRef, () => setOverflowOpen(false));
+
+  const isAllAccounts = activeAccountId === null && accounts.length > 1;
+  const visibleAccounts = accounts.slice(0, MAX_INLINE);
+  const overflowAccounts = accounts.slice(MAX_INLINE);
+  const hasOverflow = overflowAccounts.length > 0;
+
+  const handleSwitch = useCallback(
+    (id: string) => {
+      setActiveAccount(id);
+      setOverflowOpen(false);
+    },
+    [setActiveAccount],
+  );
+
+  const handleAllAccounts = useCallback(() => {
+    setAllAccounts();
+    setOverflowOpen(false);
+  }, [setAllAccounts]);
+
+  // No accounts — prompt to add
+  if (accounts.length === 0) {
+    return (
+      <div className="px-2 py-1.5">
+        <button
+          onClick={onAddAccount}
+          className={`flex items-center w-full rounded-lg p-2 text-sm text-sidebar-text/70 hover:bg-sidebar-hover hover:text-sidebar-text transition-colors ${
+            collapsed ? "justify-center" : "gap-3"
+          }`}
+        >
+          <div className="w-7 h-7 rounded-full bg-accent/10 flex items-center justify-center shrink-0">
+            <UserPlus size={14} className="text-accent" />
+          </div>
+          {!collapsed && <span className="font-medium text-sm">Add Account</span>}
+        </button>
+      </div>
+    );
+  }
+
+  // Collapsed sidebar — just show active account avatar
+  if (collapsed) {
+    return (
+      <div className="flex flex-col items-center gap-1 px-2 py-2">
+        {isAllAccounts ? (
+          <button
+            onClick={() => accounts[0] && handleSwitch(accounts[0].id)}
+            title="All accounts"
+            className="w-7 h-7 rounded-full bg-accent/15 flex items-center justify-center"
+          >
+            <Layers size={13} className="text-accent" />
+          </button>
+        ) : (
+          accounts.slice(0, 1).map((a) => (
+            <AccountPill
+              key={a.id}
+              account={a}
+              isActive={a.id === activeAccountId}
+              onClick={() => handleSwitch(a.id)}
+            />
+          ))
+        )}
+      </div>
+    );
+  }
+
+  // Expanded sidebar — pill row
+  return (
+    <div className="relative px-3 py-2" ref={overflowRef}>
+      <div className="flex items-center gap-1.5">
+
+        {/* All Accounts pill — only when multiple accounts */}
+        {accounts.length > 1 && (
+          <button
+            onClick={handleAllAccounts}
+            title="All accounts — combined inbox"
+            className={`w-7 h-7 rounded-full flex items-center justify-center shrink-0 transition-all duration-150 ${
+              isAllAccounts
+                ? "bg-accent text-white ring-2 ring-accent ring-offset-1 ring-offset-sidebar"
+                : "bg-accent/15 text-accent opacity-60 hover:opacity-100"
+            }`}
+          >
+            <Layers size={13} />
+          </button>
+        )}
+
+        {/* Account pills */}
+        {visibleAccounts.map((account) => (
+          <AccountPill
+            key={account.id}
+            account={account}
+            isActive={account.id === activeAccountId}
+            onClick={() => handleSwitch(account.id)}
+          />
+        ))}
+
+        {/* Overflow button */}
+        {hasOverflow && (
+          <button
+            onClick={() => setOverflowOpen((v) => !v)}
+            className={`w-7 h-7 rounded-full bg-bg-tertiary flex items-center justify-center text-[0.65rem] font-semibold text-text-secondary hover:bg-bg-hover transition-colors shrink-0 ${
+              overflowOpen ? "bg-bg-hover" : ""
+            }`}
+            title={`${overflowAccounts.length} more accounts`}
+          >
+            +{overflowAccounts.length}
+          </button>
+        )}
+
+        {/* Spacer */}
+        <div className="flex-1" />
+
+        {/* Add account */}
+        <button
+          onClick={onAddAccount}
+          title="Add account"
+          className="w-7 h-7 rounded-full bg-bg-tertiary/60 flex items-center justify-center text-text-tertiary hover:bg-bg-hover hover:text-text-primary transition-colors shrink-0"
+        >
+          <Plus size={13} />
+        </button>
+      </div>
+
+      {/* Overflow dropdown */}
+      {overflowOpen && hasOverflow && (
+        <div className="absolute left-3 right-3 top-full mt-1 z-50 bg-bg-primary border border-border-primary rounded-xl shadow-lg overflow-hidden py-1">
+          {overflowAccounts.map((account) => {
+            const isActive = account.id === activeAccountId;
+            return (
+              <button
+                key={account.id}
+                onClick={() => handleSwitch(account.id)}
+                className={`flex items-center gap-2.5 w-full px-3 py-2 text-left transition-colors ${
+                  isActive ? "bg-accent/8 text-accent" : "text-text-primary hover:bg-bg-hover"
+                }`}
+              >
+                <AccountPillSmall account={account} isActive={isActive} />
+                <div className="flex-1 min-w-0">
+                  <div className="text-[0.8125rem] font-medium truncate leading-tight">
+                    {account.displayName || account.email.split("@")[0]}
+                  </div>
+                  <div className="text-xs text-text-tertiary truncate leading-tight">
+                    {account.email}
+                  </div>
+                </div>
+                {isActive && <Check size={13} className="shrink-0 text-accent" />}
+              </button>
+            );
+          })}
+        </div>
       )}
     </div>
   );
 }
 
-/** Smaller avatar used inside the dropdown list */
-function AccountAvatarSmall({
-  account,
-  isActive,
-}: {
-  account: Account;
-  isActive: boolean;
-}) {
+function AccountPillSmall({ account, isActive }: { account: Account; isActive: boolean }) {
   const [imgError, setImgError] = useState(false);
-
-  const initial = (
-    account.displayName?.[0] ?? account.email[0] ?? "?"
-  ).toUpperCase();
+  const initial = (account.displayName?.[0] ?? account.email[0] ?? "?").toUpperCase();
   const showImg = account.avatarUrl && !imgError;
 
   return (
     <div
-      className={`w-7 h-7 rounded-full flex items-center justify-center shrink-0 text-xs font-semibold overflow-hidden ${
-        isActive
-          ? "bg-accent text-white"
-          : "bg-accent/12 text-accent"
+      className={`w-6 h-6 rounded-full flex items-center justify-center shrink-0 text-[0.65rem] font-semibold overflow-hidden ${
+        isActive ? "bg-accent text-white" : "bg-accent/15 text-accent"
       }`}
     >
       {showImg ? (
         <img
-          key={account.avatarUrl}
           src={account.avatarUrl!}
           alt=""
           className="w-full h-full object-cover"
           onError={() => setImgError(true)}
         />
-      ) : (
-        initial
-      )}
+      ) : initial}
     </div>
   );
 }

@@ -35,8 +35,10 @@ export function EmailRenderer({
   const [cidMap, setCidMap] = useState<Map<string, string>>(new Map());
 
   const theme = useUIStore((s) => s.theme);
+  const visualTheme = useUIStore((s) => s.visualTheme);
   const isDark = theme === "dark"
-    || (theme === "system" && window.matchMedia("(prefers-color-scheme: dark)").matches);
+    || (theme === "system" && window.matchMedia("(prefers-color-scheme: dark)").matches)
+    || visualTheme === "superhuman";
 
   const shouldBlock = blockImages && !senderAllowlisted && !overrideShow;
 
@@ -141,7 +143,7 @@ export function EmailRenderer({
       font-size: 14px;
       line-height: 1.6;
       color: ${plainTextDark ? "#e5e7eb" : "#1f2937"};
-      background: ${htmlDark ? "#f8f9fa" : "transparent"};
+      background: ${htmlDark ? "#ffffff" : "transparent"};
       word-wrap: break-word;
       overflow-wrap: break-word;
       overflow: hidden;

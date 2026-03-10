@@ -36,6 +36,12 @@ import {
   ChevronUp,
   ChevronDown,
   RotateCcw,
+  Building2,
+  BookMarked,
+  Layers,
+  Sun,
+  Moon,
+  Monitor,
   type LucideIcon,
 } from "lucide-react";
 import { SignatureEditor } from "./SignatureEditor";
@@ -47,9 +53,13 @@ import { SubscriptionManager } from "./SubscriptionManager";
 import { SmartFolderEditor } from "./SmartFolderEditor";
 import { QuickStepEditor } from "./QuickStepEditor";
 import { SmartLabelEditor } from "./SmartLabelEditor";
+import { CrmSettings } from "./CrmSettings";
+import { WritingSettings } from "./WritingSettings";
+import { InboxSplitsEditor } from "./InboxSplitsEditor";
 import { SHORTCUTS, getDefaultKeyMap } from "@/constants/shortcuts";
 import { useShortcutStore } from "@/stores/shortcutStore";
 import { COLOR_THEMES } from "@/constants/themes";
+import type { VisualTheme } from "@/stores/uiStore";
 import {
   getAliasesForAccount,
   setDefaultAlias,
@@ -62,17 +72,20 @@ import { Button } from "@/components/ui/Button";
 import { TextField } from "@/components/ui/TextField";
 import appIcon from "@/assets/icon.png";
 
-type SettingsTab = "general" | "notifications" | "composing" | "mail-rules" | "people" | "accounts" | "shortcuts" | "ai" | "about";
+type SettingsTab = "general" | "notifications" | "composing" | "mail-rules" | "people" | "accounts" | "shortcuts" | "ai" | "writing" | "crm" | "inbox-splits" | "about";
 
 const tabs: { id: SettingsTab; label: string; icon: LucideIcon }[] = [
   { id: "general", label: "General", icon: Settings },
   { id: "notifications", label: "Notifications", icon: Bell },
   { id: "composing", label: "Composing", icon: PenLine },
   { id: "mail-rules", label: "Mail Rules", icon: Filter },
+  { id: "inbox-splits", label: "Inbox Splits", icon: Layers },
   { id: "people", label: "People", icon: Users },
   { id: "accounts", label: "Accounts", icon: UserCircle },
   { id: "shortcuts", label: "Shortcuts", icon: Keyboard },
   { id: "ai", label: "AI", icon: Sparkles },
+  { id: "writing", label: "Writing", icon: BookMarked },
+  { id: "crm", label: "CRM", icon: Building2 },
   { id: "about", label: "About", icon: Info },
 ];
 
@@ -87,6 +100,8 @@ export function SettingsPage() {
   const setFontScale = useUIStore((s) => s.setFontScale);
   const colorTheme = useUIStore((s) => s.colorTheme);
   const setColorTheme = useUIStore((s) => s.setColorTheme);
+  const visualTheme = useUIStore((s) => s.visualTheme);
+  const setVisualTheme = useUIStore((s) => s.setVisualTheme);
   const defaultReplyMode = useUIStore((s) => s.defaultReplyMode);
   const setDefaultReplyMode = useUIStore((s) => s.setDefaultReplyMode);
   const markAsReadBehavior = useUIStore((s) => s.markAsReadBehavior);
@@ -460,20 +475,94 @@ export function SettingsPage() {
               {activeTab === "general" && (
                 <>
                   <Section title="Appearance">
-                    <SettingRow label="Theme">
-                      <select
-                        value={theme}
-                        onChange={(e) => {
-                          const val = e.target.value as "light" | "dark" | "system";
-                          setTheme(val);
-                          setSetting("theme", val);
-                        }}
-                        className="w-48 bg-bg-tertiary text-text-primary text-sm px-3 py-1.5 rounded-md border border-border-primary focus:border-accent outline-none"
-                      >
-                        <option value="system">System</option>
-                        <option value="light">Light</option>
-                        <option value="dark">Dark</option>
-                      </select>
+                    <SettingRow label="App theme">
+                      <div className="grid grid-cols-4 gap-2.5">
+                        {(
+                          [
+                            { id: "default", name: "Default", sidebarBg: "rgba(245,245,244,0.95)", contentBg: "rgba(250,250,249,0.92)", accent: "#4f46e5", textColor: "#1c1917", desc: "Warm glass" },
+                            { id: "superhuman", name: "Superhuman", sidebarBg: "#100c09", contentBg: "#1a1410", accent: "#8B5CF6", textColor: "#FAF8F6", desc: "Dark & premium" },
+                            { id: "gmail", name: "Gmail", sidebarBg: "#F6F8FC", contentBg: "#FFFFFF", accent: "#1A73E8", textColor: "#202124", desc: "Clean & light" },
+                            { id: "outlook", name: "Outlook", sidebarBg: "#0078D4", contentBg: "#FAF9F8", accent: "#0078D4", textColor: "#201F1E", desc: "Professional" },
+                          ] as { id: VisualTheme; name: string; sidebarBg: string; contentBg: string; accent: string; textColor: string; desc: string }[]
+                        ).map((vt) => {
+                          const isActive = visualTheme === vt.id;
+                          return (
+                            <button
+                              key={vt.id}
+                              onClick={() => setVisualTheme(vt.id)}
+                              className={`relative rounded-xl overflow-hidden border-2 transition-all text-left ${
+                                isActive ? "border-accent shadow-md scale-[1.02]" : "border-border-primary hover:border-accent/40"
+                              }`}
+                            >
+                              {/* Mini preview */}
+                              <div className="flex h-14" style={{ background: vt.contentBg }}>
+                                {/* Sidebar strip */}
+                                <div className="w-7 h-full shrink-0" style={{ background: vt.sidebarBg }} />
+                                {/* Content preview */}
+                                <div className="flex-1 p-1.5 space-y-1">
+                                  {/* Tab bar */}
+                                  <div className="flex gap-1">
+                                    <div className="h-1.5 w-6 rounded-full" style={{ background: vt.accent }} />
+                                    <div className="h-1.5 w-5 rounded-full opacity-30" style={{ background: vt.textColor }} />
+                                    <div className="h-1.5 w-4 rounded-full opacity-20" style={{ background: vt.textColor }} />
+                                  </div>
+                                  {/* Thread rows */}
+                                  <div className="h-1 w-full rounded-full opacity-60" style={{ background: vt.textColor }} />
+                                  <div className="h-1 w-4/5 rounded-full opacity-35" style={{ background: vt.textColor }} />
+                                  <div className="h-1 w-full rounded-full opacity-50" style={{ background: vt.textColor }} />
+                                  <div className="h-1 w-3/4 rounded-full opacity-30" style={{ background: vt.textColor }} />
+                                </div>
+                              </div>
+                              {/* Label */}
+                              <div className={`px-2 py-1.5 ${isActive ? "bg-accent/5" : "bg-bg-secondary"}`}>
+                                <div className="text-[0.7rem] font-semibold text-text-primary">{vt.name}</div>
+                                <div className="text-[0.6rem] text-text-tertiary">{vt.desc}</div>
+                              </div>
+                              {isActive && (
+                                <div className="absolute top-1.5 right-1.5 w-4 h-4 bg-accent rounded-full flex items-center justify-center">
+                                  <Check size={9} strokeWidth={3} className="text-white" />
+                                </div>
+                              )}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </SettingRow>
+                    <SettingRow label="Mode">
+                      <div className="space-y-2">
+                        {visualTheme === "superhuman" ? (
+                          <p className="text-xs text-text-tertiary flex items-center gap-1.5">
+                            <Moon size={12} className="text-accent shrink-0" />
+                            Superhuman theme is always dark
+                          </p>
+                        ) : (
+                          <div className="flex gap-2">
+                            {(
+                              [
+                                { id: "light" as const, label: "Light", Icon: Sun },
+                                { id: "dark" as const, label: "Dark", Icon: Moon },
+                                { id: "system" as const, label: "System (auto)", Icon: Monitor },
+                              ]
+                            ).map(({ id, label, Icon }) => {
+                              const isActive = theme === id;
+                              return (
+                                <button
+                                  key={id}
+                                  onClick={() => setTheme(id)}
+                                  className={`flex flex-col items-center gap-1.5 px-4 py-2.5 rounded-xl border-2 text-xs font-medium transition-all ${
+                                    isActive
+                                      ? "border-accent bg-accent/8 text-accent shadow-sm"
+                                      : "border-border-primary bg-bg-tertiary text-text-secondary hover:border-accent/40 hover:text-text-primary"
+                                  }`}
+                                >
+                                  <Icon size={16} className={isActive ? "text-accent" : "text-text-tertiary"} />
+                                  {label}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
                     </SettingRow>
                     <SettingRow label="Reading pane">
                       <select
@@ -515,45 +604,48 @@ export function SettingsPage() {
                         <option value="xlarge">Extra Large</option>
                       </select>
                     </SettingRow>
-                    <SettingRow label="Accent color">
-                      <div className="flex items-center gap-2">
-                        {COLOR_THEMES.map((t) => {
-                          const isSelected = colorTheme === t.id;
-                          return (
-                            <button
-                              key={t.id}
-                              onClick={() => setColorTheme(t.id)}
-                              title={t.name}
-                              className={`relative w-7 h-7 rounded-full transition-all ${
-                                isSelected
-                                  ? "ring-2 ring-offset-2 ring-offset-bg-primary scale-110"
-                                  : "hover:scale-105"
-                              }`}
-                              style={{
-                                backgroundColor: t.swatch,
-                                boxShadow: isSelected
-                                  ? `0 0 0 2px var(--color-bg-primary), 0 0 0 4px ${t.swatch}`
-                                  : undefined,
-                              }}
-                            >
-                              {isSelected && (
-                                <Check size={14} className="absolute inset-0 m-auto text-white drop-shadow-sm" />
-                              )}
-                            </button>
-                          );
-                        })}
-                      </div>
-                    </SettingRow>
+                    {visualTheme === "default" && (
+                      <SettingRow label="Accent color">
+                        <div className="flex items-center gap-2">
+                          {COLOR_THEMES.map((t) => {
+                            const isSelected = colorTheme === t.id;
+                            return (
+                              <button
+                                key={t.id}
+                                onClick={() => setColorTheme(t.id)}
+                                title={t.name}
+                                className={`relative w-7 h-7 rounded-full transition-all ${
+                                  isSelected
+                                    ? "ring-2 ring-offset-2 ring-offset-bg-primary scale-110"
+                                    : "hover:scale-105"
+                                }`}
+                                style={{
+                                  backgroundColor: t.swatch,
+                                  boxShadow: isSelected
+                                    ? `0 0 0 2px var(--color-bg-primary), 0 0 0 4px ${t.swatch}`
+                                    : undefined,
+                                }}
+                              >
+                                {isSelected && (
+                                  <Check size={14} className="absolute inset-0 m-auto text-white drop-shadow-sm" />
+                                )}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </SettingRow>
+                    )}
                     <SettingRow label="Inbox view mode">
                       <select
                         value={inboxViewMode}
                         onChange={(e) => {
-                          setInboxViewMode(e.target.value as "unified" | "split");
+                          setInboxViewMode(e.target.value as "unified" | "split" | "custom-split");
                         }}
                         className="w-48 bg-bg-tertiary text-text-primary text-sm px-3 py-1.5 rounded-md border border-border-primary focus:border-accent outline-none"
                       >
                         <option value="unified">Unified</option>
-                        <option value="split">Split (Categories)</option>
+                        <option value="split">Split (Gmail categories)</option>
+                        <option value="custom-split">Custom Splits</option>
                       </select>
                     </SettingRow>
                     <ToggleRow
@@ -1512,6 +1604,37 @@ export function SettingsPage() {
                       Collapse categories into a single row in the inbox. Optionally set a delivery schedule to batch emails.
                     </p>
                     <BundleSettings />
+                  </Section>
+                </>
+              )}
+
+              {activeTab === "writing" && (
+                <WritingSettings />
+              )}
+
+              {activeTab === "crm" && (
+                <CrmSettings />
+              )}
+
+              {activeTab === "inbox-splits" && (
+                <>
+                  <Section title="Inbox Splits">
+                    <p className="text-xs text-text-tertiary mb-4">
+                      Create custom tabs for your inbox. Each tab shows threads matching its rules. Drag to reorder — threads are assigned to the first matching tab.
+                    </p>
+                    <div className="mb-4">
+                      <label className="block text-xs font-medium text-text-secondary mb-1.5">Inbox view mode</label>
+                      <select
+                        value={inboxViewMode}
+                        onChange={(e) => setInboxViewMode(e.target.value as "unified" | "split" | "custom-split")}
+                        className="text-sm bg-bg-tertiary border border-border-primary rounded px-3 py-1.5 text-text-primary"
+                      >
+                        <option value="unified">Unified inbox</option>
+                        <option value="split">Gmail-style splits (Primary, Updates, etc.)</option>
+                        <option value="custom-split">Custom splits (configure below)</option>
+                      </select>
+                    </div>
+                    {inboxViewMode === "custom-split" && <InboxSplitsEditor />}
                   </Section>
                 </>
               )}

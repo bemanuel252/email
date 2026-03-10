@@ -14,6 +14,7 @@ import { Archive, Trash2, MailOpen, Mail, Star, Clock, Ban, Pin, MailMinus, Bell
 import type { DbMessage } from "@/services/db/messages";
 import { insertFollowUpReminder, getFollowUpForThread, cancelFollowUpForThread } from "@/services/db/followUpReminders";
 import { Button } from "@/components/ui/Button";
+import { ShortcutTooltip } from "@/components/ui/ShortcutTooltip";
 
 interface ActionBarProps {
   thread: Thread;
@@ -207,137 +208,191 @@ export function ActionBar({ thread, messages, noReply, defaultReplyMode = "reply
         {/* Reply / Forward group */}
         {hasLastMessage && (
           <>
-            <Button
-              variant="secondary"
-              iconOnly
-              icon={defaultReplyMode === "replyAll" ? <ReplyAll size={15} /> : <Reply size={15} />}
-              onClick={defaultReplyMode === "replyAll" ? onReplyAll : onReply}
-              disabled={noReply}
-              title={noReply ? "This sender does not accept replies" : defaultReplyMode === "replyAll" ? "Reply All (r)" : "Reply (r)"}
-              className="disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-text-secondary"
-            />
-            <Button
-              variant="secondary"
-              iconOnly
-              icon={defaultReplyMode === "replyAll" ? <Reply size={15} /> : <ReplyAll size={15} />}
-              onClick={defaultReplyMode === "replyAll" ? onReply : onReplyAll}
-              disabled={noReply}
-              title={noReply ? "This sender does not accept replies" : defaultReplyMode === "replyAll" ? "Reply (a)" : "Reply All (a)"}
-              className="disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-text-secondary"
-            />
-            <Button
-              variant="secondary"
-              iconOnly
-              icon={<Forward size={15} />}
-              onClick={onForward}
-              title="Forward (f)"
-            />
+            <ShortcutTooltip
+              label={defaultReplyMode === "replyAll" ? "Reply All" : "Reply"}
+              shortcut={defaultReplyMode === "replyAll" ? "Enter" : "r"}
+              description={noReply ? "This sender does not accept replies" : undefined}
+            >
+              <Button
+                variant="secondary"
+                iconOnly
+                icon={defaultReplyMode === "replyAll" ? <ReplyAll size={15} /> : <Reply size={15} />}
+                onClick={defaultReplyMode === "replyAll" ? onReplyAll : onReply}
+                disabled={noReply}
+                className="disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-text-secondary"
+              />
+            </ShortcutTooltip>
+            <ShortcutTooltip
+              label={defaultReplyMode === "replyAll" ? "Reply" : "Reply All"}
+              shortcut={defaultReplyMode === "replyAll" ? "r" : "Enter"}
+              description={noReply ? "This sender does not accept replies" : undefined}
+            >
+              <Button
+                variant="secondary"
+                iconOnly
+                icon={defaultReplyMode === "replyAll" ? <Reply size={15} /> : <ReplyAll size={15} />}
+                onClick={defaultReplyMode === "replyAll" ? onReply : onReplyAll}
+                disabled={noReply}
+                className="disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-text-secondary"
+              />
+            </ShortcutTooltip>
+            <ShortcutTooltip label="Forward" shortcut="f">
+              <Button
+                variant="secondary"
+                iconOnly
+                icon={<Forward size={15} />}
+                onClick={onForward}
+              />
+            </ShortcutTooltip>
             <Separator />
           </>
         )}
 
         {/* Core actions group */}
-        <Button variant="secondary" iconOnly icon={<Archive size={15} />} onClick={handleArchive} title="Archive (e)" />
-        <Button variant="secondary" iconOnly icon={<Trash2 size={15} />} onClick={handleDelete} title="Delete (#)" />
-        <Button
-          variant="secondary"
-          iconOnly
-          icon={thread.isRead ? <Mail size={15} /> : <MailOpen size={15} />}
-          onClick={handleToggleRead}
-          title={thread.isRead ? "Mark unread" : "Mark read"}
-        />
-        <Button
-          variant="secondary"
-          iconOnly
-          icon={<Star size={15} className={thread.isStarred ? "fill-current" : ""} />}
-          onClick={handleToggleStar}
-          title={thread.isStarred ? "Unstar (s)" : "Star (s)"}
-          className={thread.isStarred ? "text-warning" : ""}
-        />
-        <Button variant="secondary" iconOnly icon={<Clock size={15} />} onClick={() => setShowSnooze(true)} title="Snooze (h)" />
-        <Button
-          variant="secondary"
-          iconOnly
-          icon={<Ban size={15} />}
-          onClick={handleSpam}
-          title={isSpamView ? "Not Spam (!)" : "Report Spam (!)"}
-        />
-        <Button
-          variant="secondary"
-          iconOnly
-          icon={<FolderInput size={15} />}
-          onClick={() => {
-            if (!activeAccountId) return;
-            window.dispatchEvent(new CustomEvent("velo-move-to-folder", { detail: { threadIds: [thread.id] } }));
-          }}
-          title="Move to folder (v)"
-        />
-        <Button
-          variant="secondary"
-          iconOnly
-          icon={<Pin size={15} className={thread.isPinned ? "fill-current" : ""} />}
-          onClick={handleTogglePin}
-          title={thread.isPinned ? "Unpin (p)" : "Pin (p)"}
-          className={thread.isPinned ? "text-accent" : ""}
-        />
-        <Button
-          variant="secondary"
-          iconOnly
-          icon={<VolumeX size={15} className={thread.isMuted ? "fill-current" : ""} />}
-          onClick={handleToggleMute}
-          title={thread.isMuted ? "Unmute (m)" : "Mute (m)"}
-          className={thread.isMuted ? "text-warning" : ""}
-        />
+        <ShortcutTooltip label="Mark Done" shortcut="e" description="Archive / remove from inbox">
+          <Button variant="secondary" iconOnly icon={<Archive size={15} />} onClick={handleArchive} />
+        </ShortcutTooltip>
+        <ShortcutTooltip label="Delete" shortcut="#" description="Move to trash">
+          <Button variant="secondary" iconOnly icon={<Trash2 size={15} />} onClick={handleDelete} />
+        </ShortcutTooltip>
+        <ShortcutTooltip
+          label={thread.isRead ? "Mark unread" : "Mark read"}
+          shortcut="u"
+        >
+          <Button
+            variant="secondary"
+            iconOnly
+            icon={thread.isRead ? <Mail size={15} /> : <MailOpen size={15} />}
+            onClick={handleToggleRead}
+          />
+        </ShortcutTooltip>
+        <ShortcutTooltip
+          label={thread.isStarred ? "Unstar" : "Star"}
+          shortcut="s"
+        >
+          <Button
+            variant="secondary"
+            iconOnly
+            icon={<Star size={15} className={thread.isStarred ? "fill-current" : ""} />}
+            onClick={handleToggleStar}
+            className={thread.isStarred ? "text-warning" : ""}
+          />
+        </ShortcutTooltip>
+        <ShortcutTooltip label="Snooze" shortcut="h" description="Remind me later">
+          <Button variant="secondary" iconOnly icon={<Clock size={15} />} onClick={() => setShowSnooze(true)} />
+        </ShortcutTooltip>
+        <ShortcutTooltip
+          label={isSpamView ? "Not Spam" : "Report Spam"}
+          shortcut="!"
+        >
+          <Button
+            variant="secondary"
+            iconOnly
+            icon={<Ban size={15} />}
+            onClick={handleSpam}
+          />
+        </ShortcutTooltip>
+        <ShortcutTooltip label="Move to folder" shortcut="v">
+          <Button
+            variant="secondary"
+            iconOnly
+            icon={<FolderInput size={15} />}
+            onClick={() => {
+              if (!activeAccountId) return;
+              window.dispatchEvent(new CustomEvent("velo-move-to-folder", { detail: { threadIds: [thread.id] } }));
+            }}
+          />
+        </ShortcutTooltip>
+        <ShortcutTooltip
+          label={thread.isPinned ? "Unpin" : "Pin"}
+          shortcut="p"
+        >
+          <Button
+            variant="secondary"
+            iconOnly
+            icon={<Pin size={15} className={thread.isPinned ? "fill-current" : ""} />}
+            onClick={handleTogglePin}
+            className={thread.isPinned ? "text-accent" : ""}
+          />
+        </ShortcutTooltip>
+        <ShortcutTooltip
+          label={thread.isMuted ? "Unmute" : "Mute"}
+          shortcut="Shift+M"
+          description={thread.isMuted ? undefined : "Archive and silence future messages"}
+        >
+          <Button
+            variant="secondary"
+            iconOnly
+            icon={<VolumeX size={15} className={thread.isMuted ? "fill-current" : ""} />}
+            onClick={handleToggleMute}
+            className={thread.isMuted ? "text-warning" : ""}
+          />
+        </ShortcutTooltip>
         {hasFollowUp ? (
-          <Button
-            variant="secondary"
-            iconOnly
-            icon={<BellRing size={15} className="fill-current" />}
-            onClick={handleCancelFollowUp}
-            title="Cancel follow-up reminder"
-            className="text-accent"
-          />
+          <ShortcutTooltip label="Cancel follow-up" description="Remove follow-up reminder">
+            <Button
+              variant="secondary"
+              iconOnly
+              icon={<BellRing size={15} className="fill-current" />}
+              onClick={handleCancelFollowUp}
+              className="text-accent"
+            />
+          </ShortcutTooltip>
         ) : (
-          <Button
-            variant="secondary"
-            iconOnly
-            icon={<BellRing size={15} />}
-            onClick={() => setShowFollowUp(true)}
-            title="Remind me if no reply"
-          />
+          <ShortcutTooltip label="Remind me" description="Follow up on time, every time">
+            <Button
+              variant="secondary"
+              iconOnly
+              icon={<BellRing size={15} />}
+              onClick={() => setShowFollowUp(true)}
+            />
+          </ShortcutTooltip>
         )}
         {hasUnsubscribe && (
-          <Button
-            variant="secondary"
-            iconOnly
-            icon={<MailMinus size={15} />}
-            onClick={handleUnsubscribe}
-            title={unsubscribeStatus === "loading" ? "Unsubscribing..." : unsubscribeStatus === "done" ? "Unsubscribed" : "Unsubscribe (u)"}
-            className={unsubscribeStatus === "done" ? "text-success" : ""}
-          />
+          <ShortcutTooltip
+            label={unsubscribeStatus === "done" ? "Unsubscribed" : "Unsubscribe"}
+            shortcut={unsubscribeStatus === "idle" ? "Cmd+U" : undefined}
+            description="Opt out and archive"
+          >
+            <Button
+              variant="secondary"
+              iconOnly
+              icon={<MailMinus size={15} />}
+              onClick={handleUnsubscribe}
+              className={unsubscribeStatus === "done" ? "text-success" : ""}
+            />
+          </ShortcutTooltip>
         )}
 
         {/* Spacer */}
         <div className="ml-auto" />
 
         {/* Utility group */}
-        <Button variant="secondary" iconOnly icon={<Printer size={15} />} onClick={onPrint} title="Print" />
-        <Button variant="secondary" iconOnly icon={<Download size={15} />} onClick={onExport} title="Export as .eml" />
-        <Button variant="secondary" iconOnly icon={<ExternalLink size={15} />} onClick={onPopOut} title="Open in new window" />
-        <Button
-          variant="secondary"
-          iconOnly
-          icon={<ListTodo size={15} className={taskSidebarVisible ? "text-accent" : ""} />}
-          onClick={onToggleTaskSidebar}
-          title={taskSidebarVisible ? "Hide task panel" : "Show task panel"}
-        />
-        <Button
-          variant="secondary"
-          iconOnly
-          icon={contactSidebarVisible ? <PanelRightClose size={15} /> : <PanelRightOpen size={15} />}
-          onClick={onToggleContactSidebar}
-          title={contactSidebarVisible ? "Hide contact sidebar" : "Show contact sidebar"}
-        />
+        <ShortcutTooltip label="Print">
+          <Button variant="secondary" iconOnly icon={<Printer size={15} />} onClick={onPrint} />
+        </ShortcutTooltip>
+        <ShortcutTooltip label="Export" description="Save as .eml file">
+          <Button variant="secondary" iconOnly icon={<Download size={15} />} onClick={onExport} />
+        </ShortcutTooltip>
+        <ShortcutTooltip label="Open in new window">
+          <Button variant="secondary" iconOnly icon={<ExternalLink size={15} />} onClick={onPopOut} />
+        </ShortcutTooltip>
+        <ShortcutTooltip label={taskSidebarVisible ? "Hide tasks" : "Show tasks"}>
+          <Button
+            variant="secondary"
+            iconOnly
+            icon={<ListTodo size={15} className={taskSidebarVisible ? "text-accent" : ""} />}
+            onClick={onToggleTaskSidebar}
+          />
+        </ShortcutTooltip>
+        <ShortcutTooltip label={contactSidebarVisible ? "Hide contact info" : "Show contact info"}>
+          <Button
+            variant="secondary"
+            iconOnly
+            icon={contactSidebarVisible ? <PanelRightClose size={15} /> : <PanelRightOpen size={15} />}
+            onClick={onToggleContactSidebar}
+          />
+        </ShortcutTooltip>
       </div>
 
       <SnoozeDialog

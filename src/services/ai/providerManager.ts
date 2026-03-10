@@ -1,7 +1,7 @@
 import { getSetting, getSecureSetting } from "@/services/db/settings";
 import { AiError } from "./errors";
-import type { AiProvider, AiProviderClient } from "./types";
-import { DEFAULT_MODELS, MODEL_SETTINGS } from "./types";
+import type { AiProvider, AiProviderClient, ModelOption } from "./types";
+import { DEFAULT_MODELS, MODEL_SETTINGS, PROVIDER_MODELS } from "./types";
 import { createClaudeProvider, clearClaudeProvider } from "./providers/claudeProvider";
 import { createOpenAIProvider, clearOpenAIProvider } from "./providers/openaiProvider";
 import { createGeminiProvider, clearGeminiProvider } from "./providers/geminiProvider";
@@ -90,6 +90,94 @@ export async function isAiAvailable(): Promise<boolean> {
     return !!key;
   } catch {
     return false;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Configured provider discovery
+// ---------------------------------------------------------------------------
+
+export const PROVIDER_DISPLAY_NAMES: Record<AiProvider, string> = {
+  claude: "Claude",
+  openai: "OpenAI",
+  gemini: "Gemini",
+  ollama: "Ollama",
+  copilot: "GitHub Copilot",
+};
+
+/** One provider group shown in the chat model picker */
+export interface ConfiguredProvider {
+  provider: AiProvider;
+  providerLabel: string;      // e.g. "Claude"
+  activeModel: string;        // currently configured model for this provider
+  models: ModelOption[];      // all selectable models for this provider
+}
+
+export async function getConfiguredProviders(): Promise<ConfiguredProvider[]> {
+  const enabled = await getSetting("ai_enabled");
+  if (enabled === "false") return [];
+
+  const results: ConfiguredProvider[] = [];
+
+  for (const [prov, keySetting] of Object.entries(API_KEY_SETTINGS) as [
+    Exclude<AiProvider, "ollama">,
+    string,
+  ][]) {
+    const key = await getSecureSetting(keySetting);
+    if (!key) continue;
+    const activeModel = (await getSetting(MODEL_SETTINGS[prov])) ?? DEFAULT_MODELS[prov];
+    results.push({
+      provider: prov,
+      providerLabel: PROVIDER_DISPLAY_NAMES[prov],
+      activeModel,
+      models: PROVIDER_MODELS[prov] ?? [],
+    });
+  }
+
+  // Ollama: use fetched model list from settings (ollama_model is just the active one;
+  // we don't have a static list, so show just the active model)
+  const ollamaUrl = await getSetting("ollama_server_url");
+  if (ollamaUrl) {
+    const activeModel = (await getSetting("ollama_model")) ?? DEFAULT_MODELS["ollama"];
+    results.push({
+      provider: "ollama",
+      providerLabel: "Ollama",
+      activeModel,
+      models: [{ id: activeModel, label: activeModel }],
+    });
+  }
+
+  return results;
+}
+
+// ---------------------------------------------------------------------------
+// Named provider lookup (for per-session overrides)
+// ---------------------------------------------------------------------------
+
+export async function getNamedProvider(
+  provider: AiProvider,
+  model: string,
+): Promise<AiProviderClient> {
+  if (provider === "ollama") {
+    const serverUrl = (await getSetting("ollama_server_url")) ?? "http://localhost:11434";
+    return createOllamaProvider(serverUrl, model);
+  }
+
+  const keySetting = API_KEY_SETTINGS[provider];
+  const apiKey = await getSecureSetting(keySetting);
+  if (!apiKey) {
+    throw new AiError("NOT_CONFIGURED", `${provider} API key not configured`);
+  }
+
+  switch (provider) {
+    case "claude":
+      return createClaudeProvider(apiKey, model);
+    case "openai":
+      return createOpenAIProvider(apiKey, model);
+    case "gemini":
+      return createGeminiProvider(apiKey, model);
+    case "copilot":
+      return createCopilotProvider(apiKey, model);
   }
 }
 

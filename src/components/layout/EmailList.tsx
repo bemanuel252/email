@@ -2,14 +2,17 @@ import { useEffect, useCallback, useMemo, useRef, useState } from "react";
 import { CSSTransition } from "react-transition-group";
 import { ThreadCard } from "../email/ThreadCard";
 import { CategoryTabs } from "../email/CategoryTabs";
-import { SearchBar } from "../search/SearchBar";
+import { SplitTabs } from "../email/SplitTabs";
+import { UnifiedInboxBar } from "../search/UnifiedInboxBar";
 import { EmailListSkeleton } from "../ui/Skeleton";
 import { useThreadStore, type Thread } from "@/stores/threadStore";
 import { useAccountStore } from "@/stores/accountStore";
 import { useUIStore } from "@/stores/uiStore";
+import { useInboxSplitsStore } from "@/stores/inboxSplitsStore";
 import { useActiveLabel, useSelectedThreadId, useActiveCategory } from "@/hooks/useRouteNavigation";
-import { navigateToThread, navigateToLabel } from "@/router/navigate";
-import { getThreadsForAccount, getThreadsForCategory, getThreadLabelIds, deleteThread as deleteThreadFromDb } from "@/services/db/threads";
+import { navigateToThread, navigateToLabel, navigateBack } from "@/router/navigate";
+import { getThreadsForAccount, getThreadsForCategory, getThreadLabelIds, getThreadsByIds, deleteThread as deleteThreadFromDb } from "@/services/db/threads";
+import { getThreadsForSplit, getThreadsForCatchAllSplit } from "@/services/db/inboxSplits";
 import { getCategoriesForThreads, getCategoryUnreadCounts } from "@/services/db/threadCategories";
 import { getActiveFollowUpThreadIds } from "@/services/db/followUpReminders";
 import { getBundleRules, getHeldThreadIds, getBundleSummaries, type DbBundleRule } from "@/services/db/bundleRules";
@@ -32,6 +35,28 @@ import {
 
 const PAGE_SIZE = 50;
 
+// Curated zero-state backgrounds — each split consistently maps to one via hash
+const ZERO_STATE_BACKGROUNDS = [
+  // Aurora Borealis
+  `radial-gradient(ellipse 150% 60% at 30% 80%, rgba(32, 196, 160, 0.35) 0%, transparent 60%), radial-gradient(ellipse 100% 80% at 70% 20%, rgba(60, 100, 220, 0.40) 0%, transparent 60%), linear-gradient(180deg, #050a1a 0%, #080d20 50%, #060e1a 100%)`,
+  // Desert Sunset
+  `radial-gradient(ellipse 120% 50% at 50% 100%, rgba(255, 140, 60, 0.5) 0%, transparent 60%), radial-gradient(ellipse 80% 60% at 20% 60%, rgba(255, 80, 100, 0.3) 0%, transparent 50%), linear-gradient(180deg, #1a0820 0%, #2d0a18 30%, #7b1800 70%, #cc4a00 95%)`,
+  // Ocean Deep
+  `radial-gradient(ellipse 100% 80% at 50% 30%, rgba(0, 160, 180, 0.22) 0%, transparent 70%), radial-gradient(ellipse 80% 60% at 80% 80%, rgba(0, 80, 130, 0.28) 0%, transparent 60%), linear-gradient(180deg, #001428 0%, #002040 45%, #003060 80%, #001828 100%)`,
+  // Mountain Twilight
+  `radial-gradient(ellipse 120% 40% at 50% 80%, rgba(200, 80, 180, 0.28) 0%, transparent 60%), radial-gradient(ellipse 80% 60% at 30% 40%, rgba(80, 40, 140, 0.32) 0%, transparent 60%), linear-gradient(180deg, #0a0520 0%, #150830 40%, #2d1050 75%, #3a0028 100%)`,
+  // Forest Night
+  `radial-gradient(ellipse 100% 60% at 50% 30%, rgba(20, 100, 60, 0.30) 0%, transparent 70%), radial-gradient(ellipse 80% 80% at 20% 70%, rgba(10, 80, 40, 0.26) 0%, transparent 60%), linear-gradient(180deg, #030a05 0%, #051208 45%, #081a0a 75%, #030a05 100%)`,
+  // Deep Space
+  `radial-gradient(ellipse 140% 70% at 60% 40%, rgba(80, 40, 180, 0.30) 0%, transparent 65%), radial-gradient(ellipse 80% 80% at 20% 80%, rgba(20, 60, 160, 0.25) 0%, transparent 60%), linear-gradient(180deg, #04040f 0%, #080818 45%, #0c0828 75%, #050510 100%)`,
+];
+
+function splitBgIndex(splitId: string): number {
+  let h = 0;
+  for (let i = 0; i < splitId.length; i++) h = (h * 31 + splitId.charCodeAt(i)) >>> 0;
+  return h % ZERO_STATE_BACKGROUNDS.length;
+}
+
 // Map sidebar labels to Gmail label IDs
 const LABEL_MAP: Record<string, string> = {
   inbox: "INBOX",
@@ -44,7 +69,7 @@ const LABEL_MAP: Record<string, string> = {
   all: "", // no filter
 };
 
-export function EmailList({ width, listRef }: { width?: number; listRef?: React.Ref<HTMLDivElement> }) {
+export function EmailList({ width, listRef, fullScreen }: { width?: number; listRef?: React.Ref<HTMLDivElement>; fullScreen?: boolean }) {
   const threads = useThreadStore((s) => s.threads);
   const selectedThreadId = useSelectedThreadId();
   const selectedThreadIds = useThreadStore((s) => s.selectedThreadIds);
@@ -69,12 +94,31 @@ export function EmailList({ width, listRef }: { width?: number; listRef?: React.
 
   const inboxViewMode = useUIStore((s) => s.inboxViewMode);
   const routerCategory = useActiveCategory();
+  const splitsStore = useInboxSplitsStore();
 
   // In split mode, use the router's category; in unified mode, always use "All"
-  const activeCategory = inboxViewMode === "split" ? routerCategory : "All";
-  const setActiveCategory = inboxViewMode === "split"
+  const activeCategory = (inboxViewMode === "split" || inboxViewMode === "custom-split") ? routerCategory : "All";
+  const setActiveCategory = (inboxViewMode === "split" || inboxViewMode === "custom-split")
     ? (cat: string) => navigateToLabel("inbox", { category: cat })
     : () => {};
+
+  // Load splits when in custom-split mode
+  useEffect(() => {
+    if (inboxViewMode !== "custom-split" || !activeAccountId) return;
+    splitsStore.loadSplits(activeAccountId, true).then(() => {
+      splitsStore.refreshUnreadCounts(activeAccountId);
+    });
+  }, [inboxViewMode, activeAccountId]);
+
+  // Auto-navigate to first split if none selected
+  useEffect(() => {
+    if (inboxViewMode !== "custom-split" || !activeLabel.startsWith("inbox")) return;
+    if (activeCategory !== "All") return;
+    const firstSplit = splitsStore.splits.find((s) => s.isEnabled);
+    if (firstSplit) {
+      navigateToLabel("inbox", { category: firstSplit.id });
+    }
+  }, [inboxViewMode, activeCategory, splitsStore.splits, activeLabel]);
 
   const [hasMore, setHasMore] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -145,10 +189,13 @@ export function EmailList({ width, listRef }: { width?: number; listRef?: React.
   const handleThreadClick = useCallback((thread: Thread) => {
     if (activeLabel === "drafts") {
       handleDraftClick(thread);
+    } else if (selectedThreadId === thread.id) {
+      // Click the open thread again → close reading pane
+      navigateBack();
     } else {
       navigateToThread(thread.id);
     }
-  }, [activeLabel, handleDraftClick]);
+  }, [activeLabel, handleDraftClick, selectedThreadId]);
 
   const handleBulkDelete = async () => {
     if (!activeAccountId || multiSelectCount === 0) return;
@@ -202,18 +249,18 @@ export function EmailList({ width, listRef }: { width?: number; listRef?: React.
   const searchThreadIds = useThreadStore((s) => s.searchThreadIds);
   const searchQuery = useThreadStore((s) => s.searchQuery);
 
+  // When search is active, load the matched threads directly from DB (cross-folder).
+  // Effect is defined below, after mapDbThreads is declared.
+  const [searchResultThreads, setSearchResultThreads] = useState<Thread[] | null>(null);
+
   const filteredThreads = useMemo(() => {
-    let filtered = threads;
-    // Apply search filter
-    if (searchThreadIds !== null) {
-      filtered = filtered.filter((t) => searchThreadIds.has(t.id));
-    }
+    // When search is active, use the DB-fetched search results (cross-folder, cross-page)
+    let filtered = searchResultThreads !== null ? searchResultThreads : threads;
     // Apply read filter
     if (readFilter === "unread") filtered = filtered.filter((t) => !t.isRead);
     else if (readFilter === "read") filtered = filtered.filter((t) => t.isRead);
-    // Category filtering is now server-side (Phase 4) — no client-side filter needed
     return filtered;
-  }, [threads, readFilter, searchThreadIds]);
+  }, [searchResultThreads, threads, readFilter]);
 
   // Pre-compute bundled category Set for O(1) lookups in filter
   const bundledCategorySet = useMemo(
@@ -256,6 +303,31 @@ export function EmailList({ width, listRef }: { width?: number; listRef?: React.
     );
   }, []);
 
+  // Load search result threads from DB when searchThreadIds changes.
+  // Placed here (after mapDbThreads) because it depends on mapDbThreads.
+  useEffect(() => {
+    if (searchThreadIds === null) {
+      setSearchResultThreads(null);
+      return;
+    }
+    if (searchThreadIds.size === 0) {
+      setSearchResultThreads([]);
+      return;
+    }
+    const ids = [...searchThreadIds];
+    let cancelled = false;
+    // Don't filter by accountId — IDs are already scoped by the search
+    // (passing accountId here would break multi-account search results)
+    getThreadsByIds(ids)
+      .then(async (dbThreads) => {
+        if (cancelled) return;
+        const mapped = await mapDbThreads(dbThreads);
+        setSearchResultThreads(mapped);
+      })
+      .catch(() => { if (!cancelled) setSearchResultThreads([]); });
+    return () => { cancelled = true; };
+  }, [searchThreadIds, activeAccountId, mapDbThreads]);
+
   const clearSearch = useThreadStore((s) => s.clearSearch);
 
   const loadThreads = useCallback(async () => {
@@ -282,8 +354,21 @@ export function EmailList({ width, listRef }: { width?: number; listRef?: React.
         setHasMore(false); // Smart folders load all at once
       } else {
         let dbThreads;
-        // Server-side category filtering for inbox
-        if (activeLabel === "inbox" && activeCategory !== "All") {
+        // Custom split mode
+        if (activeLabel === "inbox" && inboxViewMode === "custom-split" && activeCategory !== "All") {
+          const split = splitsStore.splits.find((s) => s.id === activeCategory);
+          if (split) {
+            if (split.isCatchAll) {
+              const others = splitsStore.splits.filter((s) => s.isEnabled && !s.isCatchAll);
+              dbThreads = await getThreadsForCatchAllSplit(activeAccountId, others, PAGE_SIZE, 0);
+            } else {
+              dbThreads = await getThreadsForSplit(activeAccountId, split, PAGE_SIZE, 0);
+            }
+          } else {
+            dbThreads = await getThreadsForAccount(activeAccountId, "INBOX", PAGE_SIZE, 0);
+          }
+        // Server-side category filtering for inbox split mode
+        } else if (activeLabel === "inbox" && inboxViewMode === "split" && activeCategory !== "All") {
           dbThreads = await getThreadsForCategory(activeAccountId, activeCategory, PAGE_SIZE, 0);
         } else {
           const gmailLabelId = LABEL_MAP[activeLabel] ?? activeLabel;
@@ -304,7 +389,7 @@ export function EmailList({ width, listRef }: { width?: number; listRef?: React.
     } finally {
       setLoading(false);
     }
-  }, [activeAccountId, activeLabel, activeCategory, isSmartFolder, activeSmartFolder, setThreads, setLoading, mapDbThreads, clearSearch]);
+  }, [activeAccountId, activeLabel, activeCategory, inboxViewMode, splitsStore.splits, isSmartFolder, activeSmartFolder, setThreads, setLoading, mapDbThreads, clearSearch]);
 
   const loadMore = useCallback(async () => {
     if (!activeAccountId || loadingMore || !hasMore) return;
@@ -313,7 +398,19 @@ export function EmailList({ width, listRef }: { width?: number; listRef?: React.
     try {
       const offset = threads.length;
       let dbThreads;
-      if (activeLabel === "inbox" && activeCategory !== "All") {
+      if (activeLabel === "inbox" && inboxViewMode === "custom-split" && activeCategory !== "All") {
+        const split = splitsStore.splits.find((s) => s.id === activeCategory);
+        if (split) {
+          if (split.isCatchAll) {
+            const others = splitsStore.splits.filter((s) => s.isEnabled && !s.isCatchAll);
+            dbThreads = await getThreadsForCatchAllSplit(activeAccountId, others, PAGE_SIZE, offset);
+          } else {
+            dbThreads = await getThreadsForSplit(activeAccountId, split, PAGE_SIZE, offset);
+          }
+        } else {
+          dbThreads = await getThreadsForAccount(activeAccountId, "INBOX", PAGE_SIZE, offset);
+        }
+      } else if (activeLabel === "inbox" && inboxViewMode === "split" && activeCategory !== "All") {
         dbThreads = await getThreadsForCategory(activeAccountId, activeCategory, PAGE_SIZE, offset);
       } else {
         const gmailLabelId = LABEL_MAP[activeLabel] ?? activeLabel;
@@ -335,7 +432,7 @@ export function EmailList({ width, listRef }: { width?: number; listRef?: React.
     } finally {
       setLoadingMore(false);
     }
-  }, [activeAccountId, activeLabel, activeCategory, threads, loadingMore, hasMore, setThreads, mapDbThreads]);
+  }, [activeAccountId, activeLabel, activeCategory, inboxViewMode, splitsStore.splits, threads, loadingMore, hasMore, setThreads, mapDbThreads]);
 
   useEffect(() => {
     loadThreads();
@@ -472,6 +569,8 @@ export function EmailList({ width, listRef }: { width?: number; listRef?: React.
     if (!container) return;
 
     const handleScroll = () => {
+      // Don't load more when showing search results — those are already fully loaded
+      if (useThreadStore.getState().searchThreadIds !== null) return;
       const { scrollTop, scrollHeight, clientHeight } = container;
       if (scrollHeight - scrollTop - clientHeight < 200) {
         loadMore();
@@ -482,58 +581,98 @@ export function EmailList({ width, listRef }: { width?: number; listRef?: React.
     return () => container.removeEventListener("scroll", handleScroll);
   }, [loadMore]);
 
+  // Derived label name for non-inbox views
+  const currentLabelName = isSmartFolder
+    ? activeSmartFolder?.name ?? "Smart Folder"
+    : LABEL_MAP[activeLabel] !== undefined
+      ? activeLabel.charAt(0).toUpperCase() + activeLabel.slice(1)
+      : userLabels.find((l) => l.id === activeLabel)?.name ?? activeLabel;
+
+  const showTabs = activeLabel === "inbox" && (inboxViewMode === "split" || inboxViewMode === "custom-split");
+
   return (
     <div
       ref={listRef}
-      className={`flex flex-col bg-bg-secondary/50 glass-panel ${
-        readingPanePosition === "right"
-          ? "min-w-[240px] shrink-0"
+      className={`flex flex-col bg-bg-secondary/40 glass-panel transition-[width] duration-200 ${
+        readingPanePosition === "right" && !fullScreen
+          ? "min-w-[280px] shrink-0"
           : readingPanePosition === "bottom"
             ? "w-full border-b border-border-primary h-[40%] min-h-[200px]"
             : "w-full flex-1"
       }`}
-      style={readingPanePosition === "right" && width ? { width } : undefined}
+      style={readingPanePosition === "right" && !fullScreen && width ? { width } : undefined}
     >
-      {/* Search */}
-      <div className="px-3 py-2 border-b border-border-secondary">
-        <SearchBar />
-      </div>
-
-      {/* Header */}
-      <div className="px-4 py-2 border-b border-border-primary flex items-center justify-between">
-        <div>
-          <h2 className="text-sm font-semibold text-text-primary capitalize flex items-center gap-1.5">
-            {isSmartFolder && <FolderSearch size={14} className="text-accent shrink-0" />}
-            {isSmartFolder
-              ? activeSmartFolder?.name ?? "Smart Folder"
-              : activeLabel === "inbox" && inboxViewMode === "split" && activeCategory !== "All"
-                ? `Inbox — ${activeCategory}`
-                : LABEL_MAP[activeLabel] !== undefined
-                  ? activeLabel
-                  : userLabels.find((l) => l.id === activeLabel)?.name ?? activeLabel}
-          </h2>
-          <span className="text-xs text-text-tertiary">
-            {filteredThreads.length} conversation{filteredThreads.length !== 1 ? "s" : ""}
-          </span>
-        </div>
-        <select
-          value={readFilter}
-          onChange={(e) => setReadFilter(e.target.value as "all" | "read" | "unread")}
-          className="text-xs bg-bg-tertiary text-text-secondary px-2 py-1 rounded border border-border-primary"
-        >
-          <option value="all">All</option>
-          <option value="unread">Unread</option>
-          <option value="read">Read</option>
-        </select>
-      </div>
-
-      {/* Category tabs (inbox + split mode only) */}
-      {activeLabel === "inbox" && inboxViewMode === "split" && (
+      {/* ── Tabs at the very top (Superhuman-style) ── */}
+      {showTabs && activeLabel === "inbox" && inboxViewMode === "split" && (
         <CategoryTabs
           activeCategory={activeCategory}
           onCategoryChange={setActiveCategory}
           unreadCounts={Object.fromEntries(categoryUnreadCounts)}
         />
+      )}
+      {showTabs && activeLabel === "inbox" && inboxViewMode === "custom-split" && (
+        <SplitTabs
+          activeSplitId={activeCategory}
+          onSplitChange={setActiveCategory}
+        />
+      )}
+      {showTabs && inboxViewMode === "custom-split" && (() => {
+        const activeSplit = splitsStore.splits.find(s => s.id === activeCategory && s.isEnabled);
+        if (!activeSplit) return null;
+        const count = splitsStore.unreadCounts[activeSplit.id] ?? 0;
+        return (
+          <div className="px-4 pt-3 pb-2 flex items-baseline gap-3 shrink-0">
+            <h1 className="text-[1.0625rem] font-semibold text-text-primary tracking-tight leading-none">
+              {activeSplit.icon && <span className="mr-1.5">{activeSplit.icon}</span>}
+              {activeSplit.name}
+            </h1>
+            {count > 0 && (
+              <span className="text-[0.8125rem] text-text-tertiary font-normal tabular-nums">
+                {count}
+              </span>
+            )}
+          </div>
+        );
+      })()}
+
+      {/* ── Search + filter row ── */}
+      <div className={`flex items-center gap-2 px-3 py-2 ${showTabs ? "border-b border-border-secondary/60" : "border-b border-border-secondary"}`}>
+        <div className="flex-1 min-w-0">
+          <UnifiedInboxBar />
+        </div>
+        {/* Read filter — compact icon-style */}
+        {readFilter !== "all" ? (
+          <button
+            onClick={() => setReadFilter("all")}
+            className="shrink-0 text-[0.65rem] text-accent bg-accent/10 border border-accent/20 px-2 py-1 rounded-full transition-colors hover:bg-accent/20 whitespace-nowrap"
+          >
+            {readFilter === "unread" ? "Unread" : "Read"} ×
+          </button>
+        ) : (
+          <select
+            value={readFilter}
+            onChange={(e) => setReadFilter(e.target.value as "all" | "read" | "unread")}
+            className="shrink-0 text-[0.7rem] bg-transparent text-text-tertiary hover:text-text-secondary border-none outline-none cursor-pointer appearance-none px-1"
+            title="Filter by read status"
+          >
+            <option value="all">All</option>
+            <option value="unread">Unread</option>
+            <option value="read">Read</option>
+          </select>
+        )}
+      </div>
+
+      {/* ── Non-inbox label header (minimal) ── */}
+      {activeLabel !== "inbox" && (
+        <div className="px-4 pt-4 pb-1 flex items-center gap-2">
+          {isSmartFolder && <FolderSearch size={13} className="text-accent shrink-0" />}
+          <h2 className="text-[0.8rem] font-semibold text-text-secondary uppercase tracking-wider">
+            {currentLabelName}
+          </h2>
+          <span className="text-[0.65rem] text-text-quaternary ml-auto">
+            {filteredThreads.length}
+          </span>
+        </div>
       )}
 
       {/* Multi-select action bar */}
@@ -590,13 +729,21 @@ export function EmailList({ width, listRef }: { width?: number; listRef?: React.
         {isLoading && threads.length === 0 ? (
           <EmailListSkeleton />
         ) : filteredThreads.length === 0 && bundleRules.length === 0 ? (
-          <EmptyStateForContext
-            searchQuery={searchQuery}
-            activeAccountId={activeAccountId}
-            activeLabel={activeLabel}
-            readFilter={readFilter}
-            activeCategory={activeCategory}
-          />
+          (inboxViewMode === "custom-split" && activeLabel === "inbox" && !searchQuery && readFilter === "all") ? (
+            <SplitZeroState
+              splitId={activeCategory}
+              splitName={splitsStore.splits.find(s => s.id === activeCategory)?.name ?? activeCategory}
+              splitIcon={splitsStore.splits.find(s => s.id === activeCategory)?.icon ?? undefined}
+            />
+          ) : (
+            <EmptyStateForContext
+              searchQuery={searchQuery}
+              activeAccountId={activeAccountId}
+              activeLabel={activeLabel}
+              readFilter={readFilter}
+              activeCategory={activeCategory}
+            />
+          )
         ) : (
           <>
             {/* Bundle rows for "All" inbox view */}
@@ -695,6 +842,45 @@ export function EmailList({ width, listRef }: { width?: number; listRef?: React.
             )}
           </>
         )}
+      </div>
+    </div>
+  );
+}
+
+function SplitZeroState({ splitId, splitName, splitIcon }: { splitId: string; splitName: string; splitIcon?: string }) {
+  const bgIndex = splitBgIndex(splitId);
+  const bg = ZERO_STATE_BACKGROUNDS[bgIndex]!;
+
+  return (
+    <div
+      className="flex-1 flex flex-col items-center justify-center relative overflow-hidden transition-[background] duration-500"
+      style={{ background: bg, minHeight: "100%" }}
+    >
+      {/* Scrim to ensure text readability */}
+      <div className="absolute inset-0 bg-black/20 pointer-events-none" />
+
+      {/* Content */}
+      <div className="relative z-10 flex flex-col items-center gap-3 text-center px-8">
+        {splitIcon && (
+          <div className="text-4xl mb-1 opacity-90">{splitIcon}</div>
+        )}
+        <h2 className="text-2xl font-semibold text-white/90 tracking-tight">
+          All done
+        </h2>
+        <p className="text-sm text-white/55 font-medium tracking-wide">
+          {splitName}
+        </p>
+        <div className="flex items-center gap-4 mt-4">
+          <span className="text-[0.7rem] text-white/35 font-medium">
+            <kbd className="font-mono bg-white/10 px-1.5 py-0.5 rounded text-white/50">Tab</kbd>
+            {" "}Next split
+          </span>
+          <span className="text-white/20">·</span>
+          <span className="text-[0.7rem] text-white/35 font-medium">
+            <kbd className="font-mono bg-white/10 px-1.5 py-0.5 rounded text-white/50">⌘K</kbd>
+            {" "}Command palette
+          </span>
+        </div>
       </div>
     </div>
   );

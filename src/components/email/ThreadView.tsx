@@ -362,7 +362,7 @@ export function ThreadView({ thread }: ThreadViewProps) {
 
   if (loading) {
     return (
-      <div className="flex flex-col h-full">
+      <div className="flex flex-col h-full bg-bg-primary">
         <MessageSkeleton />
         <MessageSkeleton />
         <MessageSkeleton />
@@ -378,7 +378,7 @@ export function ThreadView({ thread }: ThreadViewProps) {
   const primarySenderName = lastMessage?.from_name ?? null;
 
   return (
-    <div className="flex h-full @container relative">
+    <div className="flex h-full @container relative bg-bg-primary">
       <div className="flex flex-col flex-1 min-w-0">
         {/* Unified action bar */}
         <ActionBar

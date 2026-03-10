@@ -794,6 +794,157 @@ const MIGRATIONS = [
       CREATE INDEX IF NOT EXISTS idx_accounts_provider_type ON accounts(provider_type);
     `,
   },
+  {
+    version: 25,
+    description: "Chat agent tables",
+    sql: `
+      CREATE TABLE IF NOT EXISTS chat_sessions (
+        id TEXT PRIMARY KEY,
+        account_id TEXT NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+        title TEXT,
+        created_at INTEGER NOT NULL DEFAULT (unixepoch()),
+        updated_at INTEGER NOT NULL DEFAULT (unixepoch())
+      );
+      CREATE INDEX IF NOT EXISTS idx_chat_sessions_account ON chat_sessions(account_id, updated_at DESC);
+
+      CREATE TABLE IF NOT EXISTS chat_messages (
+        id TEXT PRIMARY KEY,
+        session_id TEXT NOT NULL REFERENCES chat_sessions(id) ON DELETE CASCADE,
+        account_id TEXT NOT NULL,
+        role TEXT NOT NULL CHECK(role IN ('user','assistant','tool_result')),
+        content TEXT NOT NULL,
+        tool_calls_json TEXT,
+        tool_results_json TEXT,
+        metadata_json TEXT,
+        created_at INTEGER NOT NULL DEFAULT (unixepoch())
+      );
+      CREATE INDEX IF NOT EXISTS idx_chat_messages_session ON chat_messages(session_id, created_at ASC);
+    `,
+  },
+  {
+    version: 26,
+    description: "CRM integration tables",
+    sql: `
+      CREATE TABLE IF NOT EXISTS crm_connections (
+        id TEXT PRIMARY KEY,
+        provider TEXT NOT NULL,
+        display_name TEXT NOT NULL,
+        config_json TEXT NOT NULL DEFAULT '{}',
+        is_enabled INTEGER NOT NULL DEFAULT 1,
+        last_sync_at INTEGER,
+        sync_status TEXT NOT NULL DEFAULT 'idle',
+        created_at INTEGER NOT NULL DEFAULT (unixepoch())
+      );
+      CREATE INDEX IF NOT EXISTS idx_crm_connections_enabled ON crm_connections(provider, is_enabled);
+
+      CREATE TABLE IF NOT EXISTS crm_contacts (
+        id TEXT PRIMARY KEY,
+        connection_id TEXT NOT NULL REFERENCES crm_connections(id) ON DELETE CASCADE,
+        email TEXT NOT NULL,
+        display_name TEXT,
+        company TEXT,
+        title TEXT,
+        phone TEXT,
+        deal_stage TEXT,
+        deal_value REAL,
+        tags_json TEXT NOT NULL DEFAULT '[]',
+        raw_json TEXT NOT NULL DEFAULT '{}',
+        crm_record_id TEXT,
+        crm_record_url TEXT,
+        last_synced_at INTEGER NOT NULL DEFAULT (unixepoch()),
+        UNIQUE(connection_id, email)
+      );
+      CREATE INDEX IF NOT EXISTS idx_crm_contacts_email ON crm_contacts(email);
+      CREATE INDEX IF NOT EXISTS idx_crm_contacts_connection ON crm_contacts(connection_id);
+    `,
+  },
+  {
+    version: 27,
+    description: "Writing style profiles and brand guidelines",
+    sql: `
+      CREATE TABLE IF NOT EXISTS writing_profiles (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        tone TEXT NOT NULL DEFAULT 'professional',
+        custom_instructions TEXT,
+        learned_style TEXT,
+        is_default INTEGER DEFAULT 0,
+        created_at INTEGER DEFAULT (unixepoch()),
+        updated_at INTEGER DEFAULT (unixepoch())
+      );
+
+      CREATE TABLE IF NOT EXISTS brand_guidelines (
+        id TEXT PRIMARY KEY DEFAULT 'default',
+        company_name TEXT,
+        voice_description TEXT,
+        dos TEXT,
+        donts TEXT,
+        updated_at INTEGER DEFAULT (unixepoch())
+      );
+
+      INSERT OR IGNORE INTO brand_guidelines (id) VALUES ('default');
+    `,
+  },
+  {
+    version: 28,
+    description: "Add account_id to writing_profiles",
+    sql: `
+      ALTER TABLE writing_profiles ADD COLUMN account_id TEXT REFERENCES accounts(id) ON DELETE CASCADE;
+    `,
+  },
+  {
+    version: 29,
+    description: "Add inbox splits and split rules tables",
+    sql: `
+      CREATE TABLE IF NOT EXISTS inbox_splits (
+        id TEXT NOT NULL,
+        account_id TEXT NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+        name TEXT NOT NULL,
+        icon TEXT,
+        color TEXT,
+        position INTEGER NOT NULL DEFAULT 0,
+        is_enabled INTEGER NOT NULL DEFAULT 1,
+        rule_operator TEXT NOT NULL DEFAULT 'OR',
+        is_catch_all INTEGER NOT NULL DEFAULT 0,
+        created_at INTEGER NOT NULL DEFAULT (unixepoch()),
+        updated_at INTEGER NOT NULL DEFAULT (unixepoch()),
+        PRIMARY KEY (id, account_id)
+      );
+
+      CREATE TABLE IF NOT EXISTS inbox_split_rules (
+        id TEXT NOT NULL PRIMARY KEY,
+        split_id TEXT NOT NULL,
+        account_id TEXT NOT NULL,
+        rule_type TEXT NOT NULL,
+        rule_value TEXT,
+        position INTEGER NOT NULL DEFAULT 0,
+        FOREIGN KEY (split_id, account_id) REFERENCES inbox_splits(id, account_id) ON DELETE CASCADE
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_inbox_splits_account ON inbox_splits(account_id, position);
+      CREATE INDEX IF NOT EXISTS idx_inbox_split_rules_split ON inbox_split_rules(split_id, account_id);
+    `,
+  },
+  {
+    version: 30,
+    description: "Add AI classification assignments for inbox splits",
+    sql: `
+      CREATE TABLE IF NOT EXISTS thread_split_assignments (
+        thread_id TEXT NOT NULL,
+        account_id TEXT NOT NULL,
+        split_id TEXT NOT NULL,
+        confidence REAL DEFAULT 1.0,
+        assigned_at INTEGER NOT NULL DEFAULT (unixepoch()),
+        PRIMARY KEY (thread_id, account_id),
+        FOREIGN KEY (split_id, account_id) REFERENCES inbox_splits(id, account_id) ON DELETE CASCADE
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_split_assignments_split ON thread_split_assignments(account_id, split_id);
+
+      ALTER TABLE inbox_splits ADD COLUMN ai_description TEXT;
+      ALTER TABLE inbox_splits ADD COLUMN ai_classification_enabled INTEGER NOT NULL DEFAULT 0;
+    `,
+  },
 ];
 
 /**

@@ -1,3 +1,5 @@
+import Anthropic from "@anthropic-ai/sdk";
+import OpenAI from "openai";
 import type { AiProvider, ModelOption } from "./types";
 import { PROVIDER_MODELS } from "./types";
 
@@ -15,53 +17,25 @@ function cacheKey(provider: AiProvider, apiKey: string): string {
   return `${provider}:${apiKey.slice(-8)}`;
 }
 
-function formatModelLabel(id: string): string {
-  // Turn "claude-sonnet-4-20250514" → "Claude Sonnet 4 (2025-05-14)"
-  // Turn "gpt-4o-mini" → "GPT-4o Mini"
-  // For Anthropic models with date suffix
-  const anthropicMatch = id.match(/^(claude-[\w-]+?)(?:-(\d{8}))?$/);
-  if (anthropicMatch) {
-    const base = anthropicMatch[1]!
-      .split("-")
-      .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
-      .join(" ");
-    if (anthropicMatch[2]) {
-      const d = anthropicMatch[2];
-      return `${base} (${d.slice(0, 4)}-${d.slice(4, 6)}-${d.slice(6, 8)})`;
-    }
-    return base;
-  }
-  return id;
-}
-
 async function fetchClaudeModels(apiKey: string): Promise<ModelOption[]> {
-  const res = await fetch("https://api.anthropic.com/v1/models?limit=100", {
-    headers: {
-      "x-api-key": apiKey,
-      "anthropic-version": "2023-06-01",
-    },
-  });
-  if (!res.ok) throw new Error(`Anthropic API: HTTP ${res.status}`);
-  const data = await res.json();
-  const models: ModelOption[] = (data.data ?? []).map((m: { id: string; display_name?: string }) => ({
+  const client = new Anthropic({ apiKey, dangerouslyAllowBrowser: true });
+  const list = await client.models.list({ limit: 100 });
+  const models: ModelOption[] = list.data.map((m) => ({
     id: m.id,
-    label: m.display_name ?? formatModelLabel(m.id),
+    label: m.display_name ?? m.id,
   }));
-  // Newest first (ids are lexicographically sortable by date suffix)
+  // Newest first
   return models.sort((a, b) => b.id.localeCompare(a.id));
 }
 
 const OPENAI_CHAT_PREFIXES = ["gpt-4", "gpt-3.5", "o1", "o3", "o4", "chatgpt"];
 
 async function fetchOpenAIModels(apiKey: string): Promise<ModelOption[]> {
-  const res = await fetch("https://api.openai.com/v1/models", {
-    headers: { Authorization: `Bearer ${apiKey}` },
-  });
-  if (!res.ok) throw new Error(`OpenAI API: HTTP ${res.status}`);
-  const data = await res.json();
-  const models: ModelOption[] = (data.data ?? [])
+  const client = new OpenAI({ apiKey, dangerouslyAllowBrowser: true });
+  const list = await client.models.list();
+  const models: ModelOption[] = list.data
     .filter(
-      (m: { id: string; owned_by?: string }) =>
+      (m) =>
         OPENAI_CHAT_PREFIXES.some((p) => m.id.startsWith(p)) &&
         !m.id.includes("instruct") &&
         !m.id.includes("embedding") &&
@@ -70,16 +44,21 @@ async function fetchOpenAIModels(apiKey: string): Promise<ModelOption[]> {
         !m.id.includes("dall-e") &&
         m.owned_by !== "openai-internal",
     )
-    .map((m: { id: string }) => ({ id: m.id, label: m.id }));
+    .map((m) => ({ id: m.id, label: m.id }));
   return models.sort((a, b) => b.id.localeCompare(a.id));
 }
 
 async function fetchGeminiModels(apiKey: string): Promise<ModelOption[]> {
+  // GoogleGenerativeAI SDK doesn't expose model listing — use REST (supports CORS via API key in query)
   const res = await fetch(
     `https://generativelanguage.googleapis.com/v1beta/models?key=${encodeURIComponent(apiKey)}&pageSize=50`,
   );
   if (!res.ok) throw new Error(`Gemini API: HTTP ${res.status}`);
   const data = await res.json();
+  // Validate it's a Gemini response, not an HTML CORS error page
+  if (!data.models && !Array.isArray(data.models)) {
+    if (data.error) throw new Error(data.error.message ?? "Gemini API error");
+  }
   const models: ModelOption[] = (data.models ?? [])
     .filter((m: { supportedGenerationMethods?: string[] }) =>
       m.supportedGenerationMethods?.includes("generateContent"),
@@ -92,25 +71,31 @@ async function fetchGeminiModels(apiKey: string): Promise<ModelOption[]> {
 }
 
 async function fetchCopilotModels(pat: string): Promise<ModelOption[]> {
-  const res = await fetch("https://models.github.ai/catalog/models", {
-    headers: {
-      Authorization: `Bearer ${pat}`,
+  // GitHub Models uses OpenAI-compatible API
+  const client = new OpenAI({
+    apiKey: pat,
+    baseURL: "https://models.github.ai/inference",
+    defaultHeaders: {
       Accept: "application/vnd.github+json",
       "X-GitHub-Api-Version": "2022-11-28",
     },
+    dangerouslyAllowBrowser: true,
   });
-  if (!res.ok) throw new Error(`GitHub Models API: HTTP ${res.status}`);
-  const data = await res.json();
-  const models: ModelOption[] = (Array.isArray(data) ? data : [])
+  const list = await client.models.list();
+  const models: ModelOption[] = list.data
     .filter(
-      (m: { supported_output_modalities?: string[]; tags?: string[] }) =>
-        m.supported_output_modalities?.includes("text") &&
+      (m) =>
+        // @ts-expect-error GitHub models API includes extra fields
+        (m.supported_output_modalities == null || m.supported_output_modalities.includes("text")) &&
+        // @ts-expect-error
         !m.tags?.includes("embedding") &&
+        // @ts-expect-error
         !m.tags?.includes("image-generation"),
     )
-    .map((m: { id: string; name?: string }) => ({
+    .map((m) => ({
       id: m.id,
-      label: m.name ?? m.id,
+      // @ts-expect-error GitHub models API includes name field
+      label: (m.name as string | undefined) ?? m.id,
     }));
   return models.sort((a, b) => a.label.localeCompare(b.label));
 }

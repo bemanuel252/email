@@ -42,31 +42,31 @@
  * Dark mode overrides — applied when <html class="dark">
  */
 .dark {
-  --color-bg-primary: rgba(15, 23, 42, 0.88);
-  --color-bg-secondary: rgba(30, 41, 59, 0.82);
-  --color-bg-tertiary: rgba(51, 65, 85, 0.78);
-  --color-bg-hover: rgba(51, 65, 85, 0.58);
-  --color-bg-selected: rgba(30, 58, 95, 0.68);
+  --color-bg-primary: rgba(26, 26, 31, 0.92);
+  --color-bg-secondary: rgba(34, 34, 40, 0.88);
+  --color-bg-tertiary: rgba(46, 46, 56, 0.85);
+  --color-bg-hover: rgba(255, 255, 255, 0.05);
+  --color-bg-selected: rgba(99, 102, 241, 0.18);
 
-  --color-text-primary: #f8fafc;
-  --color-text-secondary: #cbd5e1;
-  --color-text-tertiary: #94a3b8;
+  --color-text-primary: rgba(255, 255, 255, 0.90);
+  --color-text-secondary: rgba(255, 255, 255, 0.65);
+  --color-text-tertiary: rgba(255, 255, 255, 0.40);
 
-  --color-border-primary: rgba(255, 255, 255, 0.1);
-  --color-border-secondary: rgba(255, 255, 255, 0.06);
+  --color-border-primary: rgba(255, 255, 255, 0.08);
+  --color-border-secondary: rgba(255, 255, 255, 0.04);
 
   --color-accent: #818cf8;
   --color-accent-hover: #6366f1;
-  --color-accent-light: #312e81;
+  --color-accent-light: rgba(99, 102, 241, 0.20);
 
-  --color-sidebar-bg: rgba(15, 23, 42, 0.88);
-  --color-sidebar-text: #e2e8f0;
-  --color-sidebar-hover: rgba(30, 41, 59, 0.7);
+  --color-sidebar-bg: rgba(18, 18, 22, 0.96);
+  --color-sidebar-text: rgba(255, 255, 255, 0.80);
+  --color-sidebar-hover: rgba(255, 255, 255, 0.06);
 
-  --glass-border: rgba(255, 255, 255, 0.1);
-  --glass-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
-  --glass-shadow-elevated: 0 16px 48px rgba(0, 0, 0, 0.3);
-  --glass-highlight: inset 0 1px 0 0 rgba(255, 255, 255, 0.06);
+  --glass-border: rgba(255, 255, 255, 0.06);
+  --glass-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+  --glass-shadow-elevated: 0 16px 48px rgba(0, 0, 0, 0.5);
+  --glass-highlight: inset 0 1px 0 0 rgba(255, 255, 255, 0.05);
 }
 
 /* Font scale — set on <html> like .dark */
@@ -97,7 +97,7 @@ body {
 }
 
 .dark body {
-  background-image: linear-gradient(135deg, #0c1222 0%, #151030 35%, #1a0a2e 65%, #0f172a 100%);
+  background: linear-gradient(160deg, #0d0d12 0%, #121218 30%, #0f0f15 60%, #0a0a10 100%);
 }
 
 /* Animated gradient blobs behind content */
@@ -429,4 +429,220 @@ body {
   .animated-bg {
     display: none;
   }
+}
+
+/* ============================================
+ * Visual Theme: Superhuman
+ * Carbon — deep neutral dark with soft indigo accent
+ * ============================================ */
+.theme-superhuman {
+  --color-bg-primary: #222228;
+  --color-bg-secondary: #2a2a32;
+  --color-bg-tertiary: #32323c;
+  --color-bg-hover: #2e2e38;
+  --color-bg-selected: rgba(108, 142, 239, 0.15);
+
+  --color-text-primary: rgba(255, 255, 255, 0.90);
+  --color-text-secondary: rgba(255, 255, 255, 0.65);
+  --color-text-tertiary: rgba(255, 255, 255, 0.40);
+
+  --color-border-primary: rgba(255, 255, 255, 0.06);
+  --color-border-secondary: rgba(255, 255, 255, 0.03);
+
+  --color-accent: #6C8EEF;
+  --color-accent-hover: #5A7AE8;
+  --color-accent-light: rgba(108, 142, 239, 0.15);
+
+  --color-sidebar-bg: #111115;
+  --color-sidebar-text: rgba(255, 255, 255, 0.80);
+  --color-sidebar-hover: rgba(255, 255, 255, 0.06);
+  --color-sidebar-active: #6C8EEF;
+
+  --glass-border: rgba(255, 255, 255, 0.05);
+  --glass-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
+  --glass-shadow-elevated: 0 20px 60px rgba(0, 0, 0, 0.7);
+  --glass-highlight: inset 0 1px 0 0 rgba(255, 255, 255, 0.04);
+}
+
+.theme-superhuman body {
+  background:
+    radial-gradient(ellipse 80% 60% at 20% 30%, rgba(26, 26, 80, 0.4) 0%, transparent 60%),
+    radial-gradient(ellipse 60% 80% at 80% 70%, rgba(15, 40, 80, 0.35) 0%, transparent 60%),
+    radial-gradient(ellipse 100% 100% at 50% 50%, rgba(10, 10, 30, 0.8) 0%, transparent 100%),
+    linear-gradient(160deg, #0d0d14 0%, #12121a 30%, #0f0f1a 60%, #0b0b12 100%);
+}
+
+.theme-superhuman #root {
+  position: relative;
+}
+
+.theme-superhuman #root::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.035'/%3E%3C/svg%3E");
+  background-size: 256px 256px;
+  background-repeat: repeat;
+  opacity: 0.4;
+}
+
+.theme-superhuman .animated-bg .blob:nth-child(1) {
+  background: radial-gradient(circle, rgba(108, 142, 239, 0.6) 0%, rgba(60, 90, 200, 0.3) 50%, transparent 70%);
+  opacity: 0.12;
+  width: 600px;
+  height: 600px;
+  top: -15%;
+  left: -10%;
+}
+.theme-superhuman .animated-bg .blob:nth-child(2) {
+  background: radial-gradient(circle, rgba(80, 60, 180, 0.5) 0%, rgba(50, 30, 150, 0.3) 50%, transparent 70%);
+  opacity: 0.10;
+  width: 500px;
+  height: 500px;
+}
+.theme-superhuman .animated-bg .blob:nth-child(3) {
+  background: radial-gradient(circle, rgba(20, 60, 120, 0.6) 0%, rgba(10, 30, 80, 0.3) 50%, transparent 70%);
+  opacity: 0.08;
+}
+.theme-superhuman .animated-bg .blob:nth-child(4) {
+  background: radial-gradient(circle, rgba(60, 30, 150, 0.4) 0%, rgba(30, 10, 100, 0.2) 50%, transparent 70%);
+  opacity: 0.09;
+}
+.theme-superhuman .animated-bg .blob:nth-child(5) {
+  background: radial-gradient(circle, rgba(30, 80, 160, 0.5) 0%, rgba(15, 50, 120, 0.3) 50%, transparent 70%);
+  opacity: 0.10;
+}
+
+/* ============================================
+ * Visual Theme: Gmail
+ * Google Material Design — clean, flat, light
+ * ============================================ */
+.theme-gmail {
+  --color-bg-primary: #FFFFFF;
+  --color-bg-secondary: #F6F8FC;
+  --color-bg-tertiary: #E8EAED;
+  --color-bg-hover: rgba(32, 33, 36, 0.06);
+  --color-bg-selected: rgba(26, 115, 232, 0.10);
+
+  --color-text-primary: #202124;
+  --color-text-secondary: #5F6368;
+  --color-text-tertiary: #80868B;
+
+  --color-border-primary: rgba(0, 0, 0, 0.12);
+  --color-border-secondary: rgba(0, 0, 0, 0.06);
+
+  --color-accent: #1A73E8;
+  --color-accent-hover: #1558B0;
+  --color-accent-light: #E8F0FE;
+
+  --color-sidebar-bg: #F6F8FC;
+  --color-sidebar-text: #202124;
+  --color-sidebar-hover: rgba(32, 33, 36, 0.08);
+  --color-sidebar-active: #1A73E8;
+
+  --glass-blur: 0px;
+  --glass-blur-heavy: 4px;
+  --glass-border: rgba(0, 0, 0, 0.08);
+  --glass-shadow: 0 1px 3px rgba(0, 0, 0, 0.1), 0 1px 2px rgba(0, 0, 0, 0.06);
+  --glass-shadow-elevated: 0 4px 16px rgba(0, 0, 0, 0.12);
+  --glass-highlight: none;
+}
+
+.theme-gmail body {
+  background: #FFFFFF;
+}
+
+.theme-gmail .animated-bg {
+  display: none;
+}
+
+/* ============================================
+ * Visual Theme: Outlook
+ * Microsoft Fluent Design — professional, structured
+ * ============================================ */
+.theme-outlook {
+  --color-bg-primary: #FAF9F8;
+  --color-bg-secondary: #F3F2F1;
+  --color-bg-tertiary: #EDEBE9;
+  --color-bg-hover: rgba(0, 0, 0, 0.04);
+  --color-bg-selected: rgba(0, 120, 212, 0.10);
+
+  --color-text-primary: #201F1E;
+  --color-text-secondary: #605E5C;
+  --color-text-tertiary: #A19F9D;
+
+  --color-border-primary: rgba(0, 0, 0, 0.10);
+  --color-border-secondary: rgba(0, 0, 0, 0.05);
+
+  --color-accent: #0078D4;
+  --color-accent-hover: #006CBF;
+  --color-accent-light: #EFF6FC;
+
+  --color-sidebar-bg: #0078D4;
+  --color-sidebar-text: #FFFFFF;
+  --color-sidebar-hover: rgba(255, 255, 255, 0.15);
+  --color-sidebar-active: #FFFFFF;
+
+  --glass-blur: 4px;
+  --glass-blur-heavy: 8px;
+  --glass-border: rgba(0, 0, 0, 0.08);
+  --glass-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  --glass-shadow-elevated: 0 8px 24px rgba(0, 0, 0, 0.12);
+  --glass-highlight: none;
+}
+
+.theme-outlook body {
+  background: #FAF9F8;
+}
+
+.theme-outlook .animated-bg {
+  display: none;
+}
+
+/* ============================================
+ * Gmail dark variant — applied when .dark.theme-gmail
+ * ============================================ */
+.dark.theme-gmail {
+  --color-bg-primary: #1f2533;
+  --color-bg-secondary: #252b3b;
+  --color-bg-tertiary: #2e3547;
+  --color-bg-hover: rgba(255, 255, 255, 0.05);
+  --color-bg-selected: rgba(26, 115, 232, 0.20);
+  --color-text-primary: rgba(255, 255, 255, 0.87);
+  --color-text-secondary: rgba(255, 255, 255, 0.60);
+  --color-text-tertiary: rgba(255, 255, 255, 0.38);
+  --color-border-primary: rgba(255, 255, 255, 0.08);
+  --color-border-secondary: rgba(255, 255, 255, 0.04);
+  --color-accent: #8ab4f8;
+  --color-accent-hover: #aecbfa;
+  --color-accent-light: rgba(138, 180, 248, 0.15);
+  --color-sidebar-bg: #1b1f2e;
+  --color-sidebar-text: rgba(255, 255, 255, 0.80);
+  --color-sidebar-hover: rgba(255, 255, 255, 0.06);
+  --color-sidebar-active: #8ab4f8;
+}
+
+/* ============================================
+ * Outlook dark variant — applied when .dark.theme-outlook
+ * ============================================ */
+.dark.theme-outlook {
+  --color-bg-primary: #1b1b25;
+  --color-bg-secondary: #21212e;
+  --color-bg-tertiary: #2a2a3a;
+  --color-bg-hover: rgba(255, 255, 255, 0.05);
+  --color-bg-selected: rgba(0, 120, 212, 0.20);
+  --color-text-primary: rgba(255, 255, 255, 0.87);
+  --color-text-secondary: rgba(255, 255, 255, 0.60);
+  --color-text-tertiary: rgba(255, 255, 255, 0.38);
+  --color-border-primary: rgba(255, 255, 255, 0.08);
+  --color-border-secondary: rgba(255, 255, 255, 0.04);
+  --color-accent: #4da6ff;
+  --color-accent-hover: #66b3ff;
+  --color-accent-light: rgba(77, 166, 255, 0.15);
+  --color-sidebar-bg: #0e2a4a;
+  --color-sidebar-text: rgba(255, 255, 255, 0.90);
+  --color-sidebar-hover: rgba(255, 255, 255, 0.08);
+  --color-sidebar-active: #4da6ff;
 }

@@ -9,7 +9,8 @@ export type EmailDensity = "compact" | "default" | "spacious";
 export type DefaultReplyMode = "reply" | "replyAll";
 export type MarkAsReadBehavior = "instant" | "2s" | "manual";
 export type FontScale = "small" | "default" | "large" | "xlarge";
-export type InboxViewMode = "unified" | "split";
+export type InboxViewMode = "unified" | "split" | "custom-split";
+export type VisualTheme = "default" | "superhuman" | "gmail" | "outlook";
 
 export interface SidebarNavItem {
   id: string;
@@ -28,6 +29,7 @@ interface UIState {
   markAsReadBehavior: MarkAsReadBehavior;
   fontScale: FontScale;
   colorTheme: ColorThemeId;
+  visualTheme: VisualTheme;
   sendAndArchive: boolean;
   inboxViewMode: InboxViewMode;
   taskSidebarVisible: boolean;
@@ -49,6 +51,7 @@ interface UIState {
   setMarkAsReadBehavior: (behavior: MarkAsReadBehavior) => void;
   setFontScale: (scale: FontScale) => void;
   setColorTheme: (theme: ColorThemeId) => void;
+  setVisualTheme: (theme: VisualTheme) => void;
   setSendAndArchive: (enabled: boolean) => void;
   setInboxViewMode: (mode: InboxViewMode) => void;
   toggleTaskSidebar: () => void;
@@ -73,6 +76,7 @@ export const useUIStore = create<UIState>((set) => ({
   markAsReadBehavior: "instant",
   fontScale: "default",
   colorTheme: "indigo",
+  visualTheme: "default",
   sendAndArchive: false,
   inboxViewMode: "unified",
   taskSidebarVisible: false,
@@ -82,7 +86,10 @@ export const useUIStore = create<UIState>((set) => ({
   pendingOpsCount: 0,
   isSyncingFolder: null,
 
-  setTheme: (theme) => set({ theme }),
+  setTheme: (theme) => {
+    setSetting("theme", theme).catch(() => {});
+    set({ theme });
+  },
   toggleSidebar: () =>
     set((state) => {
       const collapsed = !state.sidebarCollapsed;
@@ -128,6 +135,10 @@ export const useUIStore = create<UIState>((set) => ({
   setColorTheme: (colorTheme) => {
     setSetting("color_theme", colorTheme).catch(() => {});
     set({ colorTheme });
+  },
+  setVisualTheme: (visualTheme) => {
+    setSetting("visual_theme", visualTheme).catch(() => {});
+    set({ visualTheme });
   },
   setSendAndArchive: (sendAndArchive) => {
     setSetting("send_and_archive", String(sendAndArchive)).catch(() => {});

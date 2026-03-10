@@ -40,9 +40,15 @@ import {
   Paperclip,
   FolderSearch,
   Loader2,
+  MessageSquareText,
+  Sun,
+  Moon,
+  Monitor,
   type LucideIcon,
 } from "lucide-react";
+import { setSetting } from "@/services/db/settings";
 import { useTaskStore } from "@/stores/taskStore";
+import { ShortcutTooltip } from "@/components/ui/ShortcutTooltip";
 
 interface SidebarProps {
   collapsed: boolean;
@@ -98,7 +104,7 @@ function DroppableNavItem({
       onClick={onClick}
       onContextMenu={onContextMenu}
       title={title}
-      className={`flex items-center w-full py-2 text-sm transition-colors press-scale ${
+      className={`flex items-center w-full py-1.5 text-[0.8125rem] transition-colors press-scale ${
         collapsed ? "justify-center px-0" : "gap-3 px-3 text-left"
       } ${
         isOver
@@ -209,6 +215,8 @@ export function Sidebar({ collapsed, onAddAccount }: SidebarProps) {
   const activeLabel = useActiveLabel();
   const toggleSidebar = useUIStore((s) => s.toggleSidebar);
   const sidebarNavConfig = useUIStore((s) => s.sidebarNavConfig);
+  const theme = useUIStore((s) => s.theme);
+  const setTheme = useUIStore((s) => s.setTheme);
   const taskIncompleteCount = useTaskStore((s) => s.incompleteCount);
   const inboxViewMode = useUIStore((s) => s.inboxViewMode);
   const setInboxViewMode = useUIStore((s) => s.setInboxViewMode);
@@ -350,13 +358,26 @@ export function Sidebar({ collapsed, onAddAccount }: SidebarProps) {
       <AccountSwitcher collapsed={collapsed} onAddAccount={onAddAccount} />
 
       {/* Compose button */}
-      <div className="px-3 py-2">
-        <button
-          onClick={() => openComposer()}
-          className="w-full flex items-center justify-center gap-2 bg-accent hover:bg-accent-hover text-white rounded-lg py-2 text-sm font-medium interactive-btn"
-        >
-          {collapsed ? <Plus size={16} /> : "Compose"}
-        </button>
+      <div className={collapsed ? "flex justify-center px-2 py-1.5" : "px-3 py-1.5"}>
+        {collapsed ? (
+          <ShortcutTooltip label="New Email" shortcut="c" side="right">
+            <button
+              onClick={() => openComposer()}
+              className="w-8 h-8 flex items-center justify-center bg-transparent hover:bg-sidebar-hover rounded-lg p-2 text-sidebar-text/60 hover:text-sidebar-text transition-colors"
+            >
+              <Pencil size={15} />
+            </button>
+          </ShortcutTooltip>
+        ) : (
+          <button
+            onClick={() => openComposer()}
+            className="flex items-center gap-2 w-full px-1 py-1 rounded-lg hover:bg-sidebar-hover transition-colors group"
+          >
+            <Pencil size={13} className="text-sidebar-text/50 group-hover:text-sidebar-text transition-colors shrink-0" />
+            <span className="text-xs text-sidebar-text/50 group-hover:text-sidebar-text transition-colors flex-1 text-left">New Email</span>
+            <span className="text-[0.6rem] text-sidebar-text/30 bg-sidebar-hover px-1 rounded font-mono">C</span>
+          </button>
+        )}
       </div>
 
       <nav className="flex-1 overflow-y-auto py-2">
@@ -455,7 +476,7 @@ export function Sidebar({ collapsed, onAddAccount }: SidebarProps) {
         {showSmartFolders && (smartFolders.length > 0 || !collapsed) && (
           <>
             {!collapsed && (
-              <div className="flex items-center justify-between px-3 pt-4 pb-1">
+              <div className="flex items-center justify-between px-3 pt-3 pb-0.5">
                 <span className="text-xs font-medium text-sidebar-text/60 uppercase tracking-wider">
                   Smart Folders
                 </span>
@@ -510,7 +531,7 @@ export function Sidebar({ collapsed, onAddAccount }: SidebarProps) {
         {showLabels && (labels.length > 0 || !collapsed) && (
           <>
             {!collapsed && (
-              <div className="flex items-center justify-between px-3 pt-4 pb-1">
+              <div className="flex items-center justify-between px-3 pt-3 pb-0.5">
                 <span className="text-xs font-medium text-sidebar-text/60 uppercase tracking-wider">
                   Labels
                 </span>
@@ -603,40 +624,72 @@ export function Sidebar({ collapsed, onAddAccount }: SidebarProps) {
 
       {/* Bottom bar: Settings + collapse toggle */}
       <div className={`py-2 border-t border-border-primary flex ${collapsed ? "flex-col items-center gap-1 px-2" : "items-center gap-1 px-3"}`}>
-        <button
-          onClick={() => navigateToLabel("settings")}
-          className={`flex items-center text-sm rounded-md transition-colors ${
-            collapsed ? "p-2 justify-center" : "gap-3 flex-1 px-3 py-2 text-left"
-          } ${
-            activeLabel === "settings"
-              ? "bg-accent/10 text-accent font-medium"
-              : "text-sidebar-text hover:bg-sidebar-hover"
-          }`}
-          title="Settings"
+        <ShortcutTooltip
+          label={theme === "light" ? "Light mode — click for Dark" : theme === "dark" ? "Dark mode — click for System" : "System theme — click for Light"}
+          side={collapsed ? "right" : "top"}
         >
-          <Settings size={18} className="shrink-0" />
-          {!collapsed && <span>Settings</span>}
-        </button>
-        <button
-          onClick={() => navigateToLabel("help")}
-          className={`flex items-center text-sm rounded-md transition-colors ${
-            collapsed ? "p-2 justify-center" : "p-2"
-          } ${
-            activeLabel === "help"
-              ? "bg-accent/10 text-accent font-medium"
-              : "text-sidebar-text hover:bg-sidebar-hover"
-          }`}
-          title="Help"
-        >
-          <HelpCircle size={18} className="shrink-0" />
-        </button>
-        <button
-          onClick={toggleSidebar}
-          className="p-2 text-sidebar-text/60 hover:text-sidebar-text hover:bg-sidebar-hover rounded-md transition-colors"
-          title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-        >
-          {collapsed ? <PanelLeftOpen size={16} /> : <PanelLeftClose size={16} />}
-        </button>
+          <button
+            onClick={() => {
+              const next = theme === "light" ? "dark" : theme === "dark" ? "system" : "light";
+              setTheme(next);
+              setSetting("theme", next).catch(() => {});
+            }}
+            className="p-2 text-sidebar-text hover:bg-sidebar-hover rounded-md transition-colors"
+          >
+            {theme === "light" ? (
+              <Sun size={18} className="shrink-0" />
+            ) : theme === "dark" ? (
+              <Moon size={18} className="shrink-0" />
+            ) : (
+              <Monitor size={18} className="shrink-0" />
+            )}
+          </button>
+        </ShortcutTooltip>
+        <ShortcutTooltip label="Settings" side={collapsed ? "right" : "top"}>
+          <button
+            onClick={() => navigateToLabel("settings")}
+            className={`flex items-center text-sm rounded-md transition-colors ${
+              collapsed ? "p-2 justify-center" : "gap-3 flex-1 px-3 py-2 text-left"
+            } ${
+              activeLabel === "settings"
+                ? "bg-accent/10 text-accent font-medium"
+                : "text-sidebar-text hover:bg-sidebar-hover"
+            }`}
+          >
+            <Settings size={18} className="shrink-0" />
+            {!collapsed && <span>Settings</span>}
+          </button>
+        </ShortcutTooltip>
+        <ShortcutTooltip label="Help" shortcut="?" side={collapsed ? "right" : "top"}>
+          <button
+            onClick={() => navigateToLabel("help")}
+            className={`flex items-center text-sm rounded-md transition-colors ${
+              collapsed ? "p-2 justify-center" : "p-2"
+            } ${
+              activeLabel === "help"
+                ? "bg-accent/10 text-accent font-medium"
+                : "text-sidebar-text hover:bg-sidebar-hover"
+            }`}
+          >
+            <HelpCircle size={18} className="shrink-0" />
+          </button>
+        </ShortcutTooltip>
+        <ShortcutTooltip label="AI Assistant" shortcut="Ctrl+Shift+K" side={collapsed ? "right" : "top"}>
+          <button
+            onClick={() => window.dispatchEvent(new CustomEvent("velo-toggle-chat"))}
+            className="p-2 text-sidebar-text hover:bg-sidebar-hover rounded-md transition-colors"
+          >
+            <MessageSquareText size={18} className="shrink-0" />
+          </button>
+        </ShortcutTooltip>
+        <ShortcutTooltip label={collapsed ? "Expand sidebar" : "Collapse sidebar"} shortcut="Ctrl+Shift+E" side={collapsed ? "right" : "top"}>
+          <button
+            onClick={toggleSidebar}
+            className="p-2 text-sidebar-text/60 hover:text-sidebar-text hover:bg-sidebar-hover rounded-md transition-colors"
+          >
+            {collapsed ? <PanelLeftOpen size={16} /> : <PanelLeftClose size={16} />}
+          </button>
+        </ShortcutTooltip>
       </div>
 
       <InputDialog
