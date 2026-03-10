@@ -11,6 +11,9 @@ import {
   Table,
   FileText,
   Globe,
+  Loader2,
+  CheckCircle2,
+  AlertCircle,
 } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { TextField } from "@/components/ui/TextField";
@@ -61,6 +64,9 @@ interface CsvConfig {
   companyColumn: string;
   titleColumn: string;
   phoneColumn: string;
+  tagsColumn: string;
+  dealStageColumn: string;
+  dealValueColumn: string;
 }
 
 interface CustomApiConfig {
@@ -138,6 +144,9 @@ function defaultConfigForProvider(provider: CrmProvider): ProviderConfig {
         companyColumn: "",
         titleColumn: "",
         phoneColumn: "",
+        tagsColumn: "",
+        dealStageColumn: "",
+        dealValueColumn: "",
       } satisfies CsvConfig;
     case "custom":
       return {
@@ -352,6 +361,69 @@ function AirtableForm({
   );
 }
 
+// ─── CSV header detection helpers ────────────────────────────────────────────
+
+function parseFirstCsvLine(line: string): string[] {
+  const fields: string[] = [];
+  let inQuote = false;
+  let field = "";
+  for (const ch of line) {
+    if (ch === '"') { inQuote = !inQuote; }
+    else if (ch === "," && !inQuote) { fields.push(field.trim()); field = ""; }
+    else { field += ch; }
+  }
+  fields.push(field.trim());
+  return fields.filter(Boolean);
+}
+
+async function readCsvMeta(filePath: string): Promise<{ headers: string[]; rowCount: number }> {
+  const { readTextFile } = await import("@tauri-apps/plugin-fs");
+  const text = await readTextFile(filePath);
+  const lines = text.replace(/\r\n/g, "\n").replace(/\r/g, "\n").split("\n").filter((l) => l.trim());
+  if (lines.length === 0) return { headers: [], rowCount: 0 };
+  return { headers: parseFirstCsvLine(lines[0]!), rowCount: lines.length - 1 };
+}
+
+const CSV_HINTS: Record<keyof Omit<CsvConfig, "filePath">, string[]> = {
+  emailColumn:     ["email", "e-mail", "mail", "email_address", "emailaddress"],
+  nameColumn:      ["name", "full_name", "fullname", "full name", "contact_name", "display_name"],
+  companyColumn:   ["company", "organization", "org", "account", "business", "employer"],
+  titleColumn:     ["title", "job_title", "jobtitle", "job title", "position", "role"],
+  phoneColumn:     ["phone", "mobile", "cell", "telephone", "tel", "phone_number"],
+  tagsColumn:      ["tags", "tag", "labels", "label", "category", "categories", "segment", "group"],
+  dealStageColumn: ["deal_stage", "dealstage", "stage", "pipeline", "opportunity"],
+  dealValueColumn: ["deal_value", "dealvalue", "value", "amount", "revenue", "arr", "mrr"],
+};
+
+function autoMatchCsvColumns(headers: string[], current: CsvConfig): CsvConfig {
+  const lower = headers.map((h) => h.toLowerCase());
+  function best(hints: string[], cur: string): string {
+    if (cur) return cur;
+    for (const hint of hints) {
+      const i = lower.indexOf(hint);
+      if (i !== -1) return headers[i]!;
+    }
+    for (const hint of hints) {
+      const i = lower.findIndex((h) => h.includes(hint));
+      if (i !== -1) return headers[i]!;
+    }
+    return "";
+  }
+  return {
+    ...current,
+    emailColumn:     best(CSV_HINTS.emailColumn,     current.emailColumn),
+    nameColumn:      best(CSV_HINTS.nameColumn,      current.nameColumn),
+    companyColumn:   best(CSV_HINTS.companyColumn,   current.companyColumn),
+    titleColumn:     best(CSV_HINTS.titleColumn,     current.titleColumn),
+    phoneColumn:     best(CSV_HINTS.phoneColumn,     current.phoneColumn),
+    tagsColumn:      best(CSV_HINTS.tagsColumn,      current.tagsColumn),
+    dealStageColumn: best(CSV_HINTS.dealStageColumn, current.dealStageColumn),
+    dealValueColumn: best(CSV_HINTS.dealValueColumn, current.dealValueColumn),
+  };
+}
+
+// ─── CSV Form ─────────────────────────────────────────────────────────────────
+
 function CsvForm({
   config,
   onChange,
@@ -359,25 +431,107 @@ function CsvForm({
   config: CsvConfig;
   onChange: (c: CsvConfig) => void;
 }) {
-  const handleBrowse = async () => {
+  const [headers, setHeaders] = useState<string[]>([]);
+  const [rowCount, setRowCount] = useState<number | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [readError, setReadError] = useState<string | null>(null);
+
+  // Load headers for an existing config on mount (display-only, no auto-match)
+  useEffect(() => {
+    if (!config.filePath) return;
+    setLoading(true);
+    readCsvMeta(config.filePath)
+      .then(({ headers: hdrs, rowCount: rc }) => {
+        setHeaders(hdrs);
+        setRowCount(rc);
+      })
+      .catch(() => setReadError("Could not read file — check the path is accessible."))
+      .finally(() => setLoading(false));
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handleBrowse = useCallback(async () => {
     try {
       const { open } = await import("@tauri-apps/plugin-dialog");
       const selected = await open({
         multiple: false,
         filters: [{ name: "CSV Files", extensions: ["csv"] }],
       });
-      if (typeof selected === "string") {
+      if (typeof selected !== "string") return;
+      setLoading(true);
+      setReadError(null);
+      try {
+        const { headers: hdrs, rowCount: rc } = await readCsvMeta(selected);
+        setHeaders(hdrs);
+        setRowCount(rc);
+        // Blank out column mappings so auto-match fills them fresh
+        const blank: CsvConfig = {
+          filePath: selected,
+          emailColumn: "", nameColumn: "", companyColumn: "",
+          titleColumn: "", phoneColumn: "", tagsColumn: "",
+          dealStageColumn: "", dealValueColumn: "",
+        };
+        onChange(autoMatchCsvColumns(hdrs, blank));
+      } catch {
+        setReadError("Could not read file — check the path is accessible.");
         onChange({ ...config, filePath: selected });
+      } finally {
+        setLoading(false);
       }
     } catch (err) {
       console.error("File picker failed:", err);
     }
-  };
+  }, [config, onChange]);
+
+  // ColSelect: dropdown when headers are known, text input as fallback
+  function ColSelect({
+    label,
+    value,
+    onChangeVal,
+    required = false,
+  }: {
+    label: string;
+    value: string;
+    onChangeVal: (v: string) => void;
+    required?: boolean;
+  }) {
+    const hasError = required && !value && headers.length > 0;
+    return (
+      <div>
+        <label className="text-xs text-text-tertiary block mb-1">
+          {label}
+          {required ? <span className="text-danger ml-0.5">*</span> : <span className="text-text-quaternary ml-1">(optional)</span>}
+        </label>
+        {headers.length > 0 ? (
+          <select
+            value={value}
+            onChange={(e) => onChangeVal(e.target.value)}
+            className={`w-full px-3 py-2 text-sm bg-bg-tertiary border rounded text-text-primary outline-none focus:border-accent ${
+              hasError ? "border-danger/50" : "border-border-primary"
+            }`}
+          >
+            <option value="">— not mapped —</option>
+            {headers.map((h) => (
+              <option key={h} value={h}>{h}</option>
+            ))}
+          </select>
+        ) : (
+          <input
+            type="text"
+            value={value}
+            onChange={(e) => onChangeVal(e.target.value)}
+            placeholder={required ? "Column name" : "Column name"}
+            className="w-full px-3 py-2 text-sm bg-bg-tertiary border border-border-primary rounded text-text-primary outline-none focus:border-accent placeholder:text-text-tertiary"
+          />
+        )}
+      </div>
+    );
+  }
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-4">
+      {/* File picker */}
       <div>
-        <label className="text-sm text-text-secondary block mb-1.5">File Path</label>
+        <label className="text-sm text-text-secondary block mb-1.5">CSV File</label>
         <div className="flex gap-2">
           <input
             type="text"
@@ -386,48 +540,100 @@ function CsvForm({
             placeholder="/path/to/contacts.csv"
             className="flex-1 px-3 py-2 text-sm bg-bg-tertiary border border-border-primary rounded text-text-primary outline-none focus:border-accent"
           />
-          <Button variant="secondary" size="md" onClick={handleBrowse} className="bg-bg-tertiary border border-border-primary text-text-primary shrink-0">
+          <Button
+            variant="secondary"
+            size="md"
+            onClick={handleBrowse}
+            className="bg-bg-tertiary border border-border-primary text-text-primary shrink-0"
+          >
             Browse
           </Button>
         </div>
       </div>
-      <div className="grid grid-cols-2 gap-3">
-        <TextField
-          label="Email Column"
-          size="md"
-          value={config.emailColumn}
-          onChange={(e) => onChange({ ...config, emailColumn: e.target.value })}
-          placeholder="email"
-        />
-        <TextField
-          label="Name Column"
-          size="md"
-          value={config.nameColumn}
-          onChange={(e) => onChange({ ...config, nameColumn: e.target.value })}
-          placeholder="name"
-        />
-        <TextField
-          label="Company Column (optional)"
-          size="md"
-          value={config.companyColumn}
-          onChange={(e) => onChange({ ...config, companyColumn: e.target.value })}
-          placeholder="company"
-        />
-        <TextField
-          label="Title Column (optional)"
-          size="md"
-          value={config.titleColumn}
-          onChange={(e) => onChange({ ...config, titleColumn: e.target.value })}
-          placeholder="title"
-        />
-        <TextField
-          label="Phone Column (optional)"
-          size="md"
-          value={config.phoneColumn}
-          onChange={(e) => onChange({ ...config, phoneColumn: e.target.value })}
-          placeholder="phone"
-        />
-      </div>
+
+      {/* Status indicators */}
+      {loading && (
+        <div className="flex items-center gap-2 px-3 py-2 bg-bg-tertiary border border-border-secondary rounded-lg text-xs text-text-tertiary">
+          <Loader2 size={12} className="animate-spin shrink-0" />
+          Reading columns…
+        </div>
+      )}
+      {!loading && rowCount !== null && headers.length > 0 && (
+        <div className="flex items-center gap-2 px-3 py-2 bg-green-500/10 border border-green-500/20 rounded-lg text-xs text-green-600">
+          <CheckCircle2 size={12} className="shrink-0" />
+          <span className="font-medium">{rowCount.toLocaleString()} contacts</span>
+          <span className="text-green-600/50">·</span>
+          <span>{headers.length} columns found</span>
+        </div>
+      )}
+      {!loading && readError && (
+        <div className="flex items-center gap-2 px-3 py-2 bg-danger/10 border border-danger/20 rounded-lg text-xs text-danger">
+          <AlertCircle size={12} className="shrink-0" />
+          {readError}
+        </div>
+      )}
+
+      {/* Column mapping — shown once a file is set */}
+      {config.filePath && (
+        <div className="space-y-3">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-medium text-text-tertiary uppercase tracking-wider">Column Mapping</span>
+            {headers.length > 0 && (
+              <span className="text-xs text-text-quaternary">Columns auto-detected from your file</span>
+            )}
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <ColSelect
+              label="Email"
+              value={config.emailColumn}
+              onChangeVal={(v) => onChange({ ...config, emailColumn: v })}
+              required
+            />
+            <ColSelect
+              label="Name"
+              value={config.nameColumn}
+              onChangeVal={(v) => onChange({ ...config, nameColumn: v })}
+              required
+            />
+            <ColSelect
+              label="Company"
+              value={config.companyColumn}
+              onChangeVal={(v) => onChange({ ...config, companyColumn: v })}
+            />
+            <ColSelect
+              label="Title / Role"
+              value={config.titleColumn}
+              onChangeVal={(v) => onChange({ ...config, titleColumn: v })}
+            />
+            <ColSelect
+              label="Phone"
+              value={config.phoneColumn}
+              onChangeVal={(v) => onChange({ ...config, phoneColumn: v })}
+            />
+            <ColSelect
+              label="Tags"
+              value={config.tagsColumn}
+              onChangeVal={(v) => onChange({ ...config, tagsColumn: v })}
+            />
+            <ColSelect
+              label="Deal Stage"
+              value={config.dealStageColumn}
+              onChangeVal={(v) => onChange({ ...config, dealStageColumn: v })}
+            />
+            <ColSelect
+              label="Deal Value"
+              value={config.dealValueColumn}
+              onChangeVal={(v) => onChange({ ...config, dealValueColumn: v })}
+            />
+          </div>
+          {headers.length > 0 && (
+            <p className="text-xs text-text-quaternary">
+              Tags column values should be pipe-separated — e.g. <span className="font-mono bg-bg-tertiary px-1 rounded">active client|vip</span>.
+              Use the <span className="font-medium text-text-tertiary">Contact tag</span> filter in Inbox Splits to route emails by tag.
+            </p>
+          )}
+        </div>
+      )}
     </div>
   );
 }
