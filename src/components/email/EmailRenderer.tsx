@@ -138,7 +138,10 @@ export function EmailRenderer({
 <head>
   <meta name="color-scheme" content="${isDark ? "dark" : "light"}">
   <style>
-    html, body {
+    html {
+      overflow-x: auto;
+    }
+    body {
       margin: 0;
       padding: 16px;
       font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
@@ -148,7 +151,7 @@ export function EmailRenderer({
       background-color: ${BG} !important;
       word-wrap: break-word;
       overflow-wrap: break-word;
-      overflow: hidden;
+      min-width: 0;
     }
     img { max-width: 100%; height: auto; }
     a { color: ${LINK}; }
@@ -254,7 +257,7 @@ export function EmailRenderer({
         ref={iframeRef}
         sandbox="allow-same-origin"
         className="w-full border-0"
-        style={{ overflow: "hidden", backgroundColor: isDark ? "#1a1a1f" : undefined }}
+        style={{ overflowY: "hidden", backgroundColor: isDark ? "#1a1a1f" : undefined }}
         title="Email content"
       />
     </div>

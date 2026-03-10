@@ -114,7 +114,7 @@ export const MessageItem = memo(forwardRef<HTMLDivElement, MessageItemProps>(fun
 
       {/* Body — shown when expanded and image setting resolved */}
       {expanded && (
-        <div className="px-4 pb-4">
+        <div className="px-4 pb-4" style={{ animation: "expandDown 0.18s ease-out" }}>
           {!authBannerDismissed && (
             <AuthWarningBanner
               authResults={message.auth_results}
